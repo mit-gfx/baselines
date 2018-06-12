@@ -35,4 +35,5 @@ src
 
 MUJOCO_LOG.TXT
 
-
+# VS code folder.
+.vscode/
