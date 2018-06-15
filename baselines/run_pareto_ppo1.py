@@ -12,7 +12,8 @@ from baselines import logger
 from baselines.bench import Monitor
 from baselines.common import set_global_seeds
 
-from gym.envs.mujoco import InvertedDoublePendulumEnv
+from gym.envs.mujoco import *
+
 
 def make_pareto_mujoco_env(env_id, seed):
     """
@@ -23,6 +24,30 @@ def make_pareto_mujoco_env(env_id, seed):
     if env_id == 'InvertedDoublePendulum-v2':
         env = InvertedDoublePendulumEnv()
         env = pw.InvertedDoublePendulumParetoWrapper(env)
+    elif env_id == 'InvertedPendulum-v2':
+        env = InvertedPendulumEnv()
+        env = pw.InvertedPendulumParetoWrapper(env)
+    elif env_id == 'Hopper-v2':
+        env = HopperEnv()
+        env = pw.HopperParetoWrapper(env)
+    elif env_id == 'Swimmer-v2':
+        # TODO: fix nan.
+        env = SwimmerEnv()
+        env = pw.SwimmerParetoWrapper(env)
+    elif env_id == 'Walker2d-v2':
+        env = Walker2dEnv()
+        env = pw.Walker2dParetoWrapper(env)
+    elif env_id == 'Reacher-v2':
+        # TODO: fix nan.
+        env = ReacherEnv()
+        env = pw.ReacherParetoWrapper(env)
+    elif env_id == 'Pusher-v2':
+        # TODO: fix nan.
+        env = PusherEnv()
+        env = pw.PusherParetoWrapper(env)
+    elif env_id == 'Ant-v2':
+        env = AntEnv()
+        env = pw.AntParetoWrapper(env)
     else:
         raise ValueError('%s is not supported yet.' % env_id)
     env = Monitor(env, os.path.join(logger.get_dir(), str(rank)))
