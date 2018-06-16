@@ -126,6 +126,9 @@ def learn(env, policy_fn, *,
     compute_losses = U.function([ob, ac, atarg, ret, lrmult], losses)
 
     U.initialize()
+    # Set the logs writer to the folder /tmp/tensorflow_logs
+    tf.summary.FileWriter('/home/taodu/projects/pareto/baselines/baselines/tmp/',
+        graph_def=tf.get_default_session().graph_def)
     adam.sync()
 
     # Prepare for rollouts

@@ -39,8 +39,11 @@ class InvertedPendulumParetoWrapper(InvertedPendulumEnv):
         self.metadata = env.metadata
 
     def step(self, action):
+        # TAO: @Andy you can clamp action here.
         ob, reward, done, info = self.env.step(action)
-        # TODO: Recalculate reward.
+        # TAO: @Andy you can recalculate reward here.
+        # You can unpack ob to get positions and velocities. Read
+        # gym/env/mujoco/inverted_pendulum.py to see the full definition of ob.
         return ob, reward, done, info
 
     def reset(self):

@@ -5,14 +5,14 @@ import gym
 from baselines.common.distributions import make_pdtype
 import IPython
 
-class MlpPolicy(object):
+class ParetoMlpPolicy(object):
     recurrent = False
     def __init__(self, name, *args, **kwargs):
         with tf.variable_scope(name):
             self._init(*args, **kwargs)
             self.scope = tf.get_variable_scope().name
 
-    def _init(self, ob_space, ac_space, hid_size, num_hid_layers, gaussian_fixed_var=True):
+    def _init(self, ob_space, ac_space, hid_size, num_hid_layers, file_path, gaussian_fixed_var=True):
         assert isinstance(ob_space, gym.spaces.Box)
 
         self.pdtype = pdtype = make_pdtype(ac_space)
@@ -34,13 +34,18 @@ class MlpPolicy(object):
 
         with tf.variable_scope('pol'):
             last_out = obz
+            start_idx = 0
             for i in range(num_hid_layers):
-                last_out = tf.nn.tanh(tf.layers.dense(last_out, hid_size, name='fc%i'%(i+1), kernel_initializer=U.normc_initializer(1.0)))
+                old_last_out = last_out
+                last_out = tf.nn.tanh(tf.layers.dense(last_out, hid_size, name='fc%i'%(i+1), kernel_initializer=U.file_initializer(file_path, start_idx)))
+                start_idx += int(list(old_last_out.shape)[-1]) * hid_size
             if gaussian_fixed_var and isinstance(ac_space, gym.spaces.Box):
-                mean = tf.layers.dense(last_out, pdtype.param_shape()[0]//2, name='final', kernel_initializer=U.normc_initializer(0.01))
+                mean = tf.layers.dense(last_out, pdtype.param_shape()[0]//2, name='final', kernel_initializer=U.file_initializer(file_path, start_idx))
                 logstd = tf.get_variable(name="logstd", shape=[1, pdtype.param_shape()[0]//2], initializer=tf.zeros_initializer())
                 pdparam = tf.concat([mean, mean * 0.0 + logstd], axis=1)
             else:
+                # TAO: I assume this branch won't be called.
+                raise ValueError('ParetoMlpPolicy: this branch should not be called.')
                 pdparam = tf.layers.dense(last_out, pdtype.param_shape()[0], name='final', kernel_initializer=U.normc_initializer(0.01))
             #pdparam = tf.Print(pdparam, [pdparam])
         self.pd = pdtype.pdfromflat(pdparam)

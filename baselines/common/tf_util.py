@@ -4,7 +4,10 @@ import copy
 import os
 import functools
 import collections
+import IPython
 import multiprocessing
+import baselines.common.math_util as mu
+from functools import reduce
 
 def switch(condition, then_expression, else_expression):
     """Switches between two operations depending on a scalar value (int or bool).
@@ -76,6 +79,7 @@ ALREADY_INITIALIZED = set()
 def initialize():
     """Initialize all the uninitialized variables in the global scope."""
     new_variables = set(tf.global_variables()) - ALREADY_INITIALIZED
+    #IPython.embed()
     tf.get_default_session().run(tf.variables_initializer(new_variables))
     ALREADY_INITIALIZED.update(new_variables)
 
@@ -86,6 +90,17 @@ def initialize():
 def normc_initializer(std=1.0, axis=0):
     def _initializer(shape, dtype=None, partition_info=None):  # pylint: disable=W0613
         out = np.random.randn(*shape).astype(np.float32)
+        out *= std / np.sqrt(np.square(out).sum(axis=axis, keepdims=True))
+        return tf.constant(out)
+    return _initializer
+
+def file_initializer(file_path, start_idx, std=1.0, axis=0):
+    # file_path points to a binary file that stores a one dimensional array.
+    data = mu.ReadMatrixFromFile(file_path).flatten()
+    def _initializer(shape, dtype=None, partition_info=None):
+        num = reduce(lambda x, y: x*y, shape)
+        out = data[start_idx : start_idx + num]
+        out = out.reshape(shape).astype(np.float32)
         out *= std / np.sqrt(np.square(out).sum(axis=axis, keepdims=True))
         return tf.constant(out)
     return _initializer
