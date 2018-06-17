@@ -96,6 +96,9 @@ def normc_initializer(std=1.0, axis=0):
 
 def file_initializer(file_path, start_idx, std=1.0, axis=0):
     # file_path points to a binary file that stores a one dimensional array.
+    if not os.path.isfile(file_path): #if it doesn't exist, go with the default
+        return normc_initializer(std=std, axis=axis)
+    #otherwise, default
     data = mu.ReadMatrixFromFile(file_path).flatten()
     def _initializer(shape, dtype=None, partition_info=None):
         num = reduce(lambda x, y: x*y, shape)

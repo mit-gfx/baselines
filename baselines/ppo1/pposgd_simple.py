@@ -127,7 +127,7 @@ def learn(env, policy_fn, *,
 
     U.initialize()
     # Set the logs writer to the folder /tmp/tensorflow_logs
-    tf.summary.FileWriter('/home/taodu/projects/pareto/baselines/baselines/tmp/',
+    tf.summary.FileWriter('/home/aespielberg/ResearchCode/baselines/baselines/tmp/',
         graph_def=tf.get_default_session().graph_def)
     adam.sync()
 
