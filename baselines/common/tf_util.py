@@ -8,6 +8,7 @@ import IPython
 import multiprocessing
 import baselines.common.math_util as mu
 from functools import reduce
+from operator import mul
 
 def switch(condition, then_expression, else_expression):
     """Switches between two operations depending on a scalar value (int or bool).
@@ -228,13 +229,81 @@ def intprod(x):
     return int(np.prod(x))
 
 def flatgrad(loss, var_list, clip_norm=None):
-    grads = tf.gradients(loss, var_list)
+    grads = tf.gradients(loss, var_list)    
     if clip_norm is not None:
         grads = [tf.clip_by_norm(grad, clip_norm=clip_norm) for grad in grads]
     return tf.concat(axis=0, values=[
         tf.reshape(grad if grad is not None else tf.zeros_like(v), [numel(v)])
         for (v, grad) in zip(var_list, grads)
     ])
+
+#Courtesy: https://stackoverflow.com/questions/42157781/block-diagonal-matrices-in-tensorflow
+def block_diagonal(matrices, dtype=tf.float32):
+  r"""Constructs block-diagonal matrices from a list of batched 2D tensors.
+
+  Args:
+    matrices: A list of Tensors with shape [..., N_i, M_i] (i.e. a list of
+      matrices with the same batch dimension).
+    dtype: Data type to use. The Tensors in `matrices` must match this dtype.
+  Returns:
+    A matrix with the input matrices stacked along its main diagonal, having
+    shape [..., \sum_i N_i, \sum_i M_i].
+
+  """
+  matrices = [tf.convert_to_tensor(matrix, dtype=dtype) for matrix in matrices]
+  blocked_rows = tf.Dimension(0)
+  blocked_cols = tf.Dimension(0)
+  batch_shape = tf.TensorShape(None)
+  for matrix in matrices:
+    full_matrix_shape = matrix.get_shape().with_rank_at_least(2)
+    batch_shape = batch_shape.merge_with(full_matrix_shape[:-2])
+    blocked_rows += full_matrix_shape[-2]
+    blocked_cols += full_matrix_shape[-1]
+  ret_columns_list = []
+  for matrix in matrices:
+    matrix_shape = tf.shape(matrix)
+    ret_columns_list.append(matrix_shape[-1])
+  ret_columns = tf.add_n(ret_columns_list)
+  row_blocks = []
+  current_column = 0
+  for matrix in matrices:
+    matrix_shape = tf.shape(matrix)
+    row_before_length = current_column
+    current_column += matrix_shape[-1]
+    row_after_length = ret_columns - current_column
+    row_blocks.append(tf.pad(
+        tensor=matrix,
+        paddings=tf.concat(
+            [tf.zeros([tf.rank(matrix) - 1, 2], dtype=tf.int32),
+             [(row_before_length, row_after_length)]],
+            axis=0)))
+  blocked = tf.concat(row_blocks, -2)
+  blocked.set_shape(batch_shape.concatenate((blocked_rows, blocked_cols)))
+  return blocked
+
+def flathess(loss, var_list, clip_norm=None):
+
+    #Pseudocdoe:
+    
+    #We just need to get the hessians of the policy
+    #So, step 1: get all the hessians
+    #Step 2: Get the hessians in the namespace of the policy
+    #Reshape them properly into a matrix - can probably flatten each of the first n/2 dimensions and then concatenate them into a block
+    #Step 3: concatenate them all blockwise
+    hessians = tf.hessians(loss, var_list) 
+    #TODO: is this right?
+    if clip_norm is not None:
+        IPython.embed()
+        hessians = [tf.clip_by_norm(hessian, clip_norm=clip_norm) for hessian in hessians]
+    for i in range(len(hessians)):
+        #reshape
+        #TODO: write this more cleanly as a list comprehension?
+        hessian = hessians[i]
+        shape = [int(s) for s in hessian.shape]
+        dims = int(np.sqrt(reduce(mul, shape, 1))) #assumes symmetry
+        hessians[i] = tf.reshape(hessian, [dims, dims]) #TODO: verify this is the correct reshaping direction
+        
+    return block_diagonal(hessians)
 
 class SetFromFlat(object):
     def __init__(self, var_list, dtype=tf.float32):

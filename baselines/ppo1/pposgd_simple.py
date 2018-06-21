@@ -7,6 +7,7 @@ from baselines.common.mpi_adam import MpiAdam
 from baselines.common.mpi_moments import mpi_moments
 from mpi4py import MPI
 from collections import deque
+import IPython
 
 def traj_segment_generator(pi, env, horizon, stochastic):
     t = 0
@@ -77,6 +78,9 @@ def add_vtarg_and_adv(seg, gamma, lam):
         gaelam[t] = lastgaelam = delta + gamma * lam * nonterminal * lastgaelam
     seg["tdlamret"] = seg["adv"] + seg["vpred"]
 
+
+
+
 def learn(env, policy_fn, *,
         timesteps_per_actorbatch, # timesteps per actor per update
         clip_param, entcoeff, # clipping parameter epsilon, entropy coeff
@@ -85,8 +89,8 @@ def learn(env, policy_fn, *,
         max_timesteps=0, max_episodes=0, max_iters=0, max_seconds=0,  # time constraint
         callback=None, # you can do anything in the callback, since it takes locals(), globals()
         adam_epsilon=1e-5,
-        schedule='constant' # annealing for stepsize parameters (epsilon and adam)
-        ):
+        schedule='constant', # annealing for stepsize parameters (epsilon and adam)
+        sim_only=False):
     # Setup losses and stuff
     # ----------------------------------------
     ob_space = env.observation_space
@@ -118,7 +122,10 @@ def learn(env, policy_fn, *,
     loss_names = ["pol_surr", "pol_entpen", "vf_loss", "kl", "ent"]
 
     var_list = pi.get_trainable_variables()
-    lossandgrad = U.function([ob, ac, atarg, ret, lrmult], losses + [U.flatgrad(total_loss, var_list)])
+    if sim_only:
+        lossandgrad = U.function([ob, ac, atarg, ret, lrmult], list(losses))
+    else:
+        lossandgrad = U.function([ob, ac, atarg, ret, lrmult], losses + [U.flatgrad(total_loss, var_list), U.flathess(total_loss, var_list)])
     adam = MpiAdam(var_list, epsilon=adam_epsilon)
 
     assign_old_eq_new = U.function([],[], updates=[tf.assign(oldv, newv)
@@ -146,6 +153,16 @@ def learn(env, policy_fn, *,
 
     while True:
         if callback: callback(locals(), globals())
+        
+        #ANDYTODO: add new break condition
+        try:
+            print(np.std(rewbuffer) / np.mean(rewbuffer))
+            print(rewbuffer)
+            if np.std(rewbuffer) / np.mean(rewbuffer) < 0.01: #TODO: input argument
+                break
+        except:
+            pass #No big
+        
         if max_timesteps and timesteps_so_far >= max_timesteps:
             break
         elif max_episodes and episodes_so_far >= max_episodes:
@@ -179,17 +196,26 @@ def learn(env, policy_fn, *,
         assign_old_eq_new() # set old parameter values to new parameter values
         logger.log("Optimizing...")
         logger.log(fmt_row(13, loss_names))
-        # Here we do a bunch of optimization epochs over the data
-        for _ in range(optim_epochs):
+        # Here we do a bunch of optimization epochs over the data                
+        for _ in range(optim_epochs):  
+            gradient_set = []
+            hessian_set = []
             losses = [] # list of tuples, each of which gives the loss for a minibatch
             for batch in d.iterate_once(optim_batchsize):
-                *newlosses, g = lossandgrad(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
+                *newlosses, g, h = lossandgrad(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
+                gradient_set.extend(g)
+                hessian_set.extend(h)                
                 adam.update(g, optim_stepsize * cur_lrmult)
                 losses.append(newlosses)
             logger.log(fmt_row(13, np.mean(losses, axis=0)))
-
+        print(sorted(gradient_set))
+        hessian_approx = np.mean(hessian_set) #TODO: only calculate this when we're ready to "return" it
+        if np.mean(np.abs(gradient_set)) < 1e-4: #TODO: make this a variable
+            IPython.embed()
+            return pi
+        print(np.mean(np.abs(g)))
         logger.log("Evaluating losses...")
-        losses = []
+        losses = []        
         for batch in d.iterate_once(optim_batchsize):
             newlosses = compute_losses(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
             losses.append(newlosses)
