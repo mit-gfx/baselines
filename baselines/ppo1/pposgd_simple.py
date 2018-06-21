@@ -90,7 +90,9 @@ def learn(env, policy_fn, *,
         callback=None, # you can do anything in the callback, since it takes locals(), globals()
         adam_epsilon=1e-5,
         schedule='constant', # annealing for stepsize parameters (epsilon and adam)
-        sim_only=False):
+        gradients=True,
+        hessians=False,
+        fileprefix="data"):
     # Setup losses and stuff
     # ----------------------------------------
     ob_space = env.observation_space
@@ -122,10 +124,12 @@ def learn(env, policy_fn, *,
     loss_names = ["pol_surr", "pol_entpen", "vf_loss", "kl", "ent"]
 
     var_list = pi.get_trainable_variables()
-    if sim_only:
-        lossandgrad = U.function([ob, ac, atarg, ret, lrmult], list(losses))
-    else:
-        lossandgrad = U.function([ob, ac, atarg, ret, lrmult], losses + [U.flatgrad(total_loss, var_list), U.flathess(total_loss, var_list)])
+    
+
+    
+    if hessians:
+        lossandgradandhessian = U.function([ob, ac, atarg, ret, lrmult], losses + [U.flatgrad(total_loss, var_list), U.flathess(total_loss, var_list)])
+    lossandgrad = U.function([ob, ac, atarg, ret, lrmult], losses + [U.flatgrad(total_loss, var_list)])
     adam = MpiAdam(var_list, epsilon=adam_epsilon)
 
     assign_old_eq_new = U.function([],[], updates=[tf.assign(oldv, newv)
@@ -155,6 +159,7 @@ def learn(env, policy_fn, *,
         if callback: callback(locals(), globals())
         
         #ANDYTODO: add new break condition
+        '''
         try:
             print(np.std(rewbuffer) / np.mean(rewbuffer))
             print(rewbuffer)
@@ -162,6 +167,7 @@ def learn(env, policy_fn, *,
                 break
         except:
             pass #No big
+        '''
         
         if max_timesteps and timesteps_so_far >= max_timesteps:
             break
@@ -199,19 +205,27 @@ def learn(env, policy_fn, *,
         # Here we do a bunch of optimization epochs over the data                
         for _ in range(optim_epochs):  
             gradient_set = []
-            hessian_set = []
             losses = [] # list of tuples, each of which gives the loss for a minibatch
             for batch in d.iterate_once(optim_batchsize):
-                *newlosses, g, h = lossandgrad(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
-                gradient_set.extend(g)
-                hessian_set.extend(h)                
+                *newlosses, g = lossandgrad(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
+                gradient_set.extend(g)                               
                 adam.update(g, optim_stepsize * cur_lrmult)
                 losses.append(newlosses)
             logger.log(fmt_row(13, np.mean(losses, axis=0)))
         print(sorted(gradient_set))
-        hessian_approx = np.mean(hessian_set) #TODO: only calculate this when we're ready to "return" it
+        print('objective is')
+        print(np.sum(np.mean(losses, axis=0)[0:3]))        
         if np.mean(np.abs(gradient_set)) < 1e-4: #TODO: make this a variable
-            IPython.embed()
+            mean_objective = np.sum(np.mean(losses, axis=0)[0:3]) #TODO: abstract all this away somehow (scope)
+            if hessians:
+                hessian_set = []
+                for batch in d.iterate_once(optibatch_size):
+                    *newlosses, g, h = lossandgradandhessian(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
+                    hessian_set.extend(h)
+                    hessian_mean = np.mean(hessian_set)
+            if gradients:
+                gradient_mean = np.mean(gradient_set)
+                #TODOTODO: write to file
             return pi
         print(np.mean(np.abs(g)))
         logger.log("Evaluating losses...")
@@ -241,6 +255,17 @@ def learn(env, policy_fn, *,
         if MPI.COMM_WORLD.Get_rank()==0:
             logger.dump_tabular()
 
+    if hessians:
+        hessian_set = []
+        for batch in d.iterate_once(optibatch_size):
+            *newlosses, g, h = lossandgradandhessian(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
+            hessian_set.extend(h)
+            hessian_mean = np.mean(hessian_set)
+    if gradients:
+        gradient_mean = np.mean(gradient_set)
+    mean_objective = np.sum(np.mean(losses, axis=0)[0:3])
+    #TODO: write to file
+    
     return pi
 
 def flatten_lists(listoflists):
