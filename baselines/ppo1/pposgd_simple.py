@@ -8,7 +8,7 @@ from baselines.common.mpi_moments import mpi_moments
 from mpi4py import MPI
 from collections import deque
 import IPython
-from math_util import ReadMatrixFromFile, WriteMatrixToFile
+from baselines.common.math_util import ReadMatrixFromFile, WriteMatrixToFile
 
 def traj_segment_generator(pi, env, horizon, stochastic):
     t = 0
