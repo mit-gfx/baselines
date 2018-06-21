@@ -8,6 +8,7 @@ from baselines.common.mpi_moments import mpi_moments
 from mpi4py import MPI
 from collections import deque
 import IPython
+from math_util import ReadMatrixFromFile, WriteMatrixToFile
 
 def traj_segment_generator(pi, env, horizon, stochastic):
     t = 0
@@ -216,16 +217,19 @@ def learn(env, policy_fn, *,
         print('objective is')
         print(np.sum(np.mean(losses, axis=0)[0:3]))        
         if np.mean(np.abs(gradient_set)) < 1e-4: #TODO: make this a variable
-            mean_objective = np.sum(np.mean(losses, axis=0)[0:3]) #TODO: abstract all this away somehow (scope)
+            #TODO: abstract all this away somehow (scope)
             if hessians:
                 hessian_set = []
                 for batch in d.iterate_once(optibatch_size):
                     *newlosses, g, h = lossandgradandhessian(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
                     hessian_set.extend(h)
                     hessian_mean = np.mean(hessian_set)
+                    WriteMatrixToFile(fileprefix + '_hessian.bin', mean_hessian)
             if gradients:
                 gradient_mean = np.mean(gradient_set)
-                #TODOTODO: write to file
+                WriteMatrixToFile(fileprefix + '_gradient.bin', mean_gradient)
+            mean_objective = np.sum(np.mean(losses, axis=0)[0:3])
+            WriteMatrixToFile(fileprefix + '_objective.bin', mean_objective)
             return pi
         print(np.mean(np.abs(g)))
         logger.log("Evaluating losses...")
@@ -261,10 +265,12 @@ def learn(env, policy_fn, *,
             *newlosses, g, h = lossandgradandhessian(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
             hessian_set.extend(h)
             hessian_mean = np.mean(hessian_set)
+            WriteMatrixToFile(fileprefix + '_hessian.bin', mean_hessian)
     if gradients:
         gradient_mean = np.mean(gradient_set)
+        WriteMatrixToFile(fileprefix + '_gradient.bin', mean_gradient)
     mean_objective = np.sum(np.mean(losses, axis=0)[0:3])
-    #TODO: write to file
+    WriteMatrixToFile(fileprefix + '_objective.bin', mean_objective)
     
     return pi
 
