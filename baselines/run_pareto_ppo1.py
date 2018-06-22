@@ -73,11 +73,10 @@ def train(env_id, num_timesteps, seed, target1, target2, target3, output_prefix,
     env = make_pareto_mujoco_env(env_id, seed, target1, target2, target3)
     pi = pposgd_simple.learn(env, policy_fn,
             max_timesteps=num_timesteps,
-            input_file=input_file,
             output_prefix=output_prefix,
-            timesteps_per_actorbatch=16384,
+            timesteps_per_actorbatch=16384 * 4,
             clip_param=0.2, entcoeff=0.0,
-            optim_epochs=10, optim_stepsize=1e-2, optim_batchsize=64,
+            optim_epochs=10, optim_stepsize=5e-3, optim_batchsize=64,
             gamma=0.99, lam=0.95, schedule='linear'
         )
     env.close()
