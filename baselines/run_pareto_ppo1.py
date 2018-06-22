@@ -11,14 +11,17 @@ import gym
 from baselines import logger
 from baselines.bench import Monitor
 from baselines.common import set_global_seeds
+import IPython
 
 from gym.envs.mujoco import *
 
 
-def make_pareto_mujoco_env(env_id, seed):
+def make_pareto_mujoco_env(env_id, seed, target1, target2, target3):
     """
     Create a wrapped, monitored gym.Env for MuJoCo.
     """
+    #TODO: generalize these targets
+    
     rank = MPI.COMM_WORLD.Get_rank()
     set_global_seeds(seed + 10000 * rank)
     if env_id == 'InvertedDoublePendulum-v2':
@@ -26,7 +29,7 @@ def make_pareto_mujoco_env(env_id, seed):
         env = pw.InvertedDoublePendulumParetoWrapper(env)
     elif env_id == 'InvertedPendulum-v2':
         env = InvertedPendulumEnv()
-        env = pw.InvertedPendulumParetoWrapper(env)
+        env = pw.InvertedPendulumParetoWrapper(env, target1, target2)
     elif env_id == 'Hopper-v2':
         env = HopperEnv()
         env = pw.HopperParetoWrapper(env)
@@ -51,11 +54,14 @@ def make_pareto_mujoco_env(env_id, seed):
     else:
         raise ValueError('%s is not supported yet.' % env_id)
     env = Monitor(env, os.path.join(logger.get_dir(), str(rank)))
-    env.seed(seed)
+    env.seed(seed)    
+    env.target1 = target1
+    env.target2 = target2
+    env.target3 = target3
     return env
 
 
-def train(env_id, num_timesteps, seed, model_path=None):
+def train(env_id, num_timesteps, seed, target1, target2, target3, output_prefix, input_file, model_path=None):
     from baselines.ppo1 import mlp_policy, pposgd_simple, pareto_mlp_policy
     U.make_session(num_cpu=1).__enter__()
     def policy_fn(name, ob_space, ac_space):
@@ -64,13 +70,15 @@ def train(env_id, num_timesteps, seed, model_path=None):
         # TODO: add the filepath.
         return pareto_mlp_policy.ParetoMlpPolicy(name=name, ob_space=ob_space, ac_space=ac_space,
             hid_size=10, num_hid_layers=1, file_path='common/test.txt')
-    env = make_pareto_mujoco_env(env_id, seed)
+    env = make_pareto_mujoco_env(env_id, seed, target1, target2, target3)
     pi = pposgd_simple.learn(env, policy_fn,
             max_timesteps=num_timesteps,
-            timesteps_per_actorbatch=2048,
+            input_file=input_file,
+            output_prefix=output_prefix,
+            timesteps_per_actorbatch=16384,
             clip_param=0.2, entcoeff=0.0,
-            optim_epochs=10, optim_stepsize=5e-3, optim_batchsize=64,
-            gamma=0.99, lam=0.95, schedule='linear',
+            optim_epochs=10, optim_stepsize=1e-2, optim_batchsize=64,
+            gamma=0.99, lam=0.95, schedule='linear'
         )
     env.close()
     if model_path:
@@ -89,7 +97,7 @@ def main():
     
     if not args.play:
         # train the model
-        train(args.env, num_timesteps=args.num_timesteps, seed=args.seed, model_path=args.model_path)
+        train(args.env, num_timesteps=args.num_timesteps, seed=args.seed, model_path=args.model_path, target1 = args.target1, target2 = args.target2, target3 = args.target3, output_prefix = args.output_prefix, input_file = args.input_file)
     else:       
         # construct the model object, load pre-trained model and render
         pi = train(args.env, num_timesteps=1, seed=args.seed)

@@ -93,7 +93,8 @@ def learn(env, policy_fn, *,
         schedule='constant', # annealing for stepsize parameters (epsilon and adam)
         gradients=True,
         hessians=False,
-        fileprefix="data"):
+        input_file,
+        output_prefix):
     # Setup losses and stuff
     # ----------------------------------------
     ob_space = env.observation_space
@@ -209,29 +210,28 @@ def learn(env, policy_fn, *,
             losses = [] # list of tuples, each of which gives the loss for a minibatch
             for batch in d.iterate_once(optim_batchsize):
                 *newlosses, g = lossandgrad(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
-                gradient_set.extend(g)                               
+                gradient_set.append(g)                            
                 adam.update(g, optim_stepsize * cur_lrmult)
                 losses.append(newlosses)
             logger.log(fmt_row(13, np.mean(losses, axis=0)))
-        print(sorted(gradient_set))
         print('objective is')
-        print(np.sum(np.mean(losses, axis=0)[0:3]))        
-        if np.mean(np.abs(gradient_set)) < 1e-4: #TODO: make this a variable
+        print(np.sum(np.mean(losses, axis=0)[0:3]))    
+        if np.mean(list(map(np.linalg.norm, gradient_set))) < 1e-4: #TODO: make this a variable
             #TODO: abstract all this away somehow (scope)
             if hessians:
                 hessian_set = []
                 for batch in d.iterate_once(optibatch_size):
                     *newlosses, g, h = lossandgradandhessian(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
-                    hessian_set.extend(h)
-                    hessian_mean = np.mean(hessian_set)
+                    hessian_set.append(h)
+                    mean_hessian = np.mean(hessian_set)
                     WriteMatrixToFile(fileprefix + '_hessian.bin', mean_hessian)
             if gradients:
-                gradient_mean = np.mean(gradient_set)
+                mean_gradient = np.mean(gradient_set)
                 WriteMatrixToFile(fileprefix + '_gradient.bin', mean_gradient)
             mean_objective = np.sum(np.mean(losses, axis=0)[0:3])
             WriteMatrixToFile(fileprefix + '_objective.bin', mean_objective)
             return pi
-        print(np.mean(np.abs(g)))
+        print(np.mean(list(map(np.linalg.norm, gradient_set))))
         logger.log("Evaluating losses...")
         losses = []        
         for batch in d.iterate_once(optim_batchsize):
@@ -264,10 +264,10 @@ def learn(env, policy_fn, *,
         for batch in d.iterate_once(optibatch_size):
             *newlosses, g, h = lossandgradandhessian(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
             hessian_set.extend(h)
-            hessian_mean = np.mean(hessian_set)
+            mean_hessian = np.mean(hessian_set)
             WriteMatrixToFile(fileprefix + '_hessian.bin', mean_hessian)
     if gradients:
-        gradient_mean = np.mean(gradient_set)
+        mean_gradient = np.mean(gradient_set)
         WriteMatrixToFile(fileprefix + '_gradient.bin', mean_gradient)
     mean_objective = np.sum(np.mean(losses, axis=0)[0:3])
     WriteMatrixToFile(fileprefix + '_objective.bin', mean_objective)
