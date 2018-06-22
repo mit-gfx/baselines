@@ -58,7 +58,7 @@ class InvertedPendulumParetoWrapper(InvertedPendulumEnv):
         
         dt = self.env.dt
         y = np.cos(ob[1])
-        ydot = -np.sin(ob[3])
+        ydot = -np.sin(ob[1]) * ob[3]
         u = action[0]
         
         act = 0.5 * u * u * dt

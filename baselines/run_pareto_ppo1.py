@@ -69,7 +69,7 @@ def train(env_id, num_timesteps, seed, target1, target2, target3, output_prefix,
     #        hid_size=64, num_hid_layers=2)
         # TODO: add the filepath.
         return pareto_mlp_policy.ParetoMlpPolicy(name=name, ob_space=ob_space, ac_space=ac_space,
-            hid_size=10, num_hid_layers=1, file_path='common/test.txt')
+            hid_size=10, num_hid_layers=1, file_path=input_file)
     env = make_pareto_mujoco_env(env_id, seed, target1, target2, target3)
     pi = pposgd_simple.learn(env, policy_fn,
             max_timesteps=num_timesteps,
@@ -100,9 +100,9 @@ def main():
         train(args.env, num_timesteps=args.num_timesteps, seed=args.seed, model_path=args.model_path, target1 = args.target1, target2 = args.target2, target3 = args.target3, output_prefix = args.output_prefix, input_file = args.input_file)
     else:       
         # construct the model object, load pre-trained model and render
-        pi = train(args.env, num_timesteps=1, seed=args.seed)
+        pi = train(args.env, num_timesteps=1, seed=args.seed, target1 = args.target1, target2 = args.target2, target3 = args.target3, output_prefix = args.output_prefix, input_file = args.input_file)
         U.load_state(args.model_path)
-        env = make_pareto_mujoco_env(args.env, seed=0)
+        env = make_pareto_mujoco_env(args.env, seed=0, target1=args.target1, target2=args.target2, target3=args.target3)
 
         ob = env.reset()
         while True:
