@@ -113,7 +113,7 @@ def return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgrada
     gradient_indices = get_gradient_indices(pi)
     if hessians:
         hessian_set = []
-        for batch in d.iterate_once(optibatch_size):
+        for batch in d.iterate_once(1):
             *newlosses, g, h = lossandgradandhessian(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
             hessian_set.extend(h)
         mean_hessian = np.mean(hessian_set, axis=0)
@@ -144,7 +144,8 @@ def learn(env, policy_fn, *,
         schedule='constant', # annealing for stepsize parameters (epsilon and adam)
         gradients=True,
         hessians=True,
-        output_prefix):
+        output_prefix,
+        sim):
     # Setup losses and stuff
     # ----------------------------------------
     ob_space = env.observation_space
@@ -206,6 +207,9 @@ def learn(env, policy_fn, *,
 
     assert sum([max_iters>0, max_timesteps>0, max_episodes>0, max_seconds>0])==1, "Only one time constraint permitted"
 
+
+    gradient_indices = get_gradient_indices(pi)
+    
     while True:
         if callback: callback(locals(), globals())
         
@@ -259,19 +263,23 @@ def learn(env, policy_fn, *,
             losses = [] # list of tuples, each of which gives the loss for a minibatch
             for batch in d.iterate_once(optim_batchsize):
                 *newlosses, g = lossandgrad(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
-                gradient_set.append(g)                            
-                adam.update(g, optim_stepsize * cur_lrmult)
+                gradient_set.append(g)
+                if not sim:                     
+                    adam.update(g, optim_stepsize * cur_lrmult)
                 losses.append(newlosses)
             logger.log(fmt_row(13, np.mean(losses, axis=0)))
         print('objective is')
         print(np.sum(np.mean(losses, axis=0)[0:3]))    
         print(get_model_vars(pi))
+        if sim:
+            return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set)
+            return pi
         if np.mean(list(map(np.linalg.norm, gradient_set))) < 1e-4: #TODO: make this a variable
             #TODO: abstract all this away somehow (scope)
             print('minimized!')
             return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set)
             return pi
-        print(np.mean(list(map(np.linalg.norm, gradient_set))))
+        print(np.mean(list(map(np.linalg.norm, gradient_set[gradient_indices]))))
         logger.log("Evaluating losses...")
         losses = []        
         for batch in d.iterate_once(optim_batchsize):

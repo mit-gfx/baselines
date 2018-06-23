@@ -76,7 +76,7 @@ def train(env_id, num_timesteps, seed, target1, target2, target3, output_prefix,
             output_prefix=output_prefix,
             timesteps_per_actorbatch=16384 * 4,
             clip_param=0.2, entcoeff=0.0,
-            optim_epochs=10, optim_stepsize=5e-3, optim_batchsize=64,
+            optim_epochs=10, optim_stepsize=1e-3, optim_batchsize=64,
             gamma=0.99, lam=0.95, schedule='linear'
         )
     env.close()
@@ -96,7 +96,7 @@ def main():
     
     if not args.play:
         # train the model
-        train(args.env, num_timesteps=args.num_timesteps, seed=args.seed, model_path=args.model_path, target1 = float(args.target1), target2 = float(args.target2), target3 = float(args.target3), output_prefix = args.output_prefix, input_file = args.input_file)
+        train(args.env, num_timesteps=args.num_timesteps, seed=args.seed, model_path=args.model_path, target1 = float(args.target1), target2 = float(args.target2), target3 = float(args.target3), output_prefix = args.output_prefix, input_file = args.input_file, sim=args.sim)
     else:       
         # construct the model object, load pre-trained model and render
         pi = train(args.env, num_timesteps=1, seed=args.seed, target1 = float(args.target1), target2 = float(args.target2), target3 = float(args.target3), output_prefix = args.output_prefix, input_file = args.input_file)
