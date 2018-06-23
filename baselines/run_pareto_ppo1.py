@@ -61,7 +61,7 @@ def make_pareto_mujoco_env(env_id, seed, target1, target2, target3):
     return env
 
 
-def train(env_id, num_timesteps, seed, target1, target2, target3, output_prefix, input_file, model_path=None):
+def train(env_id, num_timesteps, seed, target1, target2, target3, output_prefix, input_file, model_path=None, sim=False, hessians=False):
     from baselines.ppo1 import mlp_policy, pposgd_simple, pareto_mlp_policy
     U.make_session(num_cpu=1).__enter__()
     def policy_fn(name, ob_space, ac_space):
@@ -77,7 +77,7 @@ def train(env_id, num_timesteps, seed, target1, target2, target3, output_prefix,
             timesteps_per_actorbatch=16384 * 4,
             clip_param=0.2, entcoeff=0.0,
             optim_epochs=10, optim_stepsize=1e-3, optim_batchsize=64,
-            gamma=0.99, lam=0.95, schedule='linear'
+            gamma=0.99, lam=0.95, schedule='linear', sim=sim, hessians=hessians
         )
     env.close()
     if model_path:
@@ -89,6 +89,8 @@ def main():
     logger.configure()
     parser = mujoco_arg_parser()
     parser.add_argument('--model-path')
+    parser.add_argument('--sim', default=False, action='store_true') 
+    parser.add_argument('--hessians', default=False, action='store_true') 
     args = parser.parse_args()
 
     if not args.model_path:
@@ -96,10 +98,10 @@ def main():
     
     if not args.play:
         # train the model
-        train(args.env, num_timesteps=args.num_timesteps, seed=args.seed, model_path=args.model_path, target1 = float(args.target1), target2 = float(args.target2), target3 = float(args.target3), output_prefix = args.output_prefix, input_file = args.input_file, sim=args.sim)
+        train(args.env, num_timesteps=args.num_timesteps, seed=args.seed, model_path=args.model_path, target1 = float(args.target1), target2 = float(args.target2), target3 = float(args.target3), output_prefix = args.output_prefix, input_file = args.input_file, sim=args.sim, hessians=args.hessians)
     else:       
         # construct the model object, load pre-trained model and render
-        pi = train(args.env, num_timesteps=1, seed=args.seed, target1 = float(args.target1), target2 = float(args.target2), target3 = float(args.target3), output_prefix = args.output_prefix, input_file = args.input_file)
+        pi = train(args.env, num_timesteps=1, seed=args.seed, target1 = float(args.target1), target2 = float(args.target2), target3 = float(args.target3), output_prefix = args.output_prefix, input_file = args.input_file, sim=False)
         U.load_state(args.model_path)
         env = make_pareto_mujoco_env(args.env, seed=0, target1=float(args.target1), target2=float(args.target2), target3=float(args.target3))
 

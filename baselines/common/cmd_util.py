@@ -11,6 +11,7 @@ from baselines.bench import Monitor
 from baselines.common import set_global_seeds
 from baselines.common.atari_wrappers import make_atari, wrap_deepmind
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
+import IPython
 
 def make_atari_env(env_id, num_env, seed, wrapper_kwargs=None, start_index=0):
     """
@@ -76,13 +77,12 @@ def mujoco_arg_parser():
     parser.add_argument('--env', help='environment ID', type=str, default='Reacher-v2')
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
     parser.add_argument('--num-timesteps', type=int, default=int(1e6))
-    parser.add_argument('--play', default=False, action='store_true')
-    parser.add_argument('--sim', default=False, action='store_true')
+    parser.add_argument('--play', default=False, action='store_true')    
     parser.add_argument('--target1', default = 1.0)
     parser.add_argument('--target2', default = 0.5)
     parser.add_argument('--target3', default = 0.5)
     parser.add_argument('--output_prefix', default = 'output')
-    parser.add_argument('--input_file', default=None)
+    parser.add_argument('--input_file', default=None)   
     return parser
 
 def robotics_arg_parser():

@@ -111,9 +111,11 @@ def get_gradient_indices(pi):
 
 def return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set):
     gradient_indices = get_gradient_indices(pi)
+    
     if hessians:
         hessian_set = []
-        for batch in d.iterate_once(1):
+        
+        for batch in d.iterate_once(d.n):
             *newlosses, g, h = lossandgradandhessian(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
             hessian_set.extend(h)
         mean_hessian = np.mean(hessian_set, axis=0)
@@ -126,7 +128,7 @@ def return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgrada
     mean_objective = np.sum(np.mean(losses, axis=0)[0:3])
     WriteMatrixToFile(output_prefix + '_objective.bin', np.array([[mean_objective]]))
     
-    model_vars = get_model_vars(pi)[gradient_indices]
+    model_vars = np.array(get_model_vars(pi))[gradient_indices]
     WriteMatrixToFile(output_prefix + '_vars.bin', np.array(model_vars))
     
     
@@ -143,7 +145,7 @@ def learn(env, policy_fn, *,
         adam_epsilon=1e-5,
         schedule='constant', # annealing for stepsize parameters (epsilon and adam)
         gradients=True,
-        hessians=True,
+        hessians=False,
         output_prefix,
         sim):
     # Setup losses and stuff
@@ -272,7 +274,8 @@ def learn(env, policy_fn, *,
         print(np.sum(np.mean(losses, axis=0)[0:3]))    
         print(get_model_vars(pi))
         if sim:
-            return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set)
+            print('return routine')
+            return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set)            
             return pi
         if np.mean(list(map(np.linalg.norm, gradient_set))) < 1e-4: #TODO: make this a variable
             #TODO: abstract all this away somehow (scope)
