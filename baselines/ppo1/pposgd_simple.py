@@ -126,7 +126,7 @@ def return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgrada
     mean_objective = np.sum(np.mean(losses, axis=0)[0:3])
     WriteMatrixToFile(output_prefix + '_objective.bin', np.array([[mean_objective]]))
     
-    model_vars = get_model_vars(pi)
+    model_vars = get_model_vars(pi)[gradient_indices]
     WriteMatrixToFile(output_prefix + '_vars.bin', np.array(model_vars))
     
     
@@ -143,7 +143,7 @@ def learn(env, policy_fn, *,
         adam_epsilon=1e-5,
         schedule='constant', # annealing for stepsize parameters (epsilon and adam)
         gradients=True,
-        hessians=False,
+        hessians=True,
         output_prefix):
     # Setup losses and stuff
     # ----------------------------------------
@@ -265,6 +265,7 @@ def learn(env, policy_fn, *,
             logger.log(fmt_row(13, np.mean(losses, axis=0)))
         print('objective is')
         print(np.sum(np.mean(losses, axis=0)[0:3]))    
+        print(get_model_vars(pi))
         if np.mean(list(map(np.linalg.norm, gradient_set))) < 1e-4: #TODO: make this a variable
             #TODO: abstract all this away somehow (scope)
             print('minimized!')

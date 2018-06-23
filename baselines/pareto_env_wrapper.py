@@ -53,7 +53,8 @@ class InvertedPendulumParetoWrapper(InvertedPendulumEnv):
         #In order to do this, make the reward the time differential:
         #(y_target - y) * ydot + (u_target - u) * udot
         target_act = self.target2
-        target_y = self.target1
+        target_y = self.target1       
+        
         #TODO: get targets
         
         dt = self.env.dt

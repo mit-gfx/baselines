@@ -96,12 +96,12 @@ def main():
     
     if not args.play:
         # train the model
-        train(args.env, num_timesteps=args.num_timesteps, seed=args.seed, model_path=args.model_path, target1 = args.target1, target2 = args.target2, target3 = args.target3, output_prefix = args.output_prefix, input_file = args.input_file)
+        train(args.env, num_timesteps=args.num_timesteps, seed=args.seed, model_path=args.model_path, target1 = float(args.target1), target2 = float(args.target2), target3 = float(args.target3), output_prefix = args.output_prefix, input_file = args.input_file)
     else:       
         # construct the model object, load pre-trained model and render
-        pi = train(args.env, num_timesteps=1, seed=args.seed, target1 = args.target1, target2 = args.target2, target3 = args.target3, output_prefix = args.output_prefix, input_file = args.input_file)
+        pi = train(args.env, num_timesteps=1, seed=args.seed, target1 = float(args.target1), target2 = float(args.target2), target3 = float(args.target3), output_prefix = args.output_prefix, input_file = args.input_file)
         U.load_state(args.model_path)
-        env = make_pareto_mujoco_env(args.env, seed=0, target1=args.target1, target2=args.target2, target3=args.target3)
+        env = make_pareto_mujoco_env(args.env, seed=0, target1=float(args.target1), target2=float(args.target2), target3=float(args.target3))
 
         ob = env.reset()
         while True:
