@@ -52,27 +52,27 @@ class InvertedPendulumParetoWrapper(InvertedPendulumEnv):
         #Want to optimize: 0.5 [(||y_target - y)^2 + (u_target  - u)^2]
         #In order to do this, make the reward the time differential:
         #(y_target - y) * ydot + (u_target - u) * udot
-        target_act = self.target2
-        target_y = self.target1       
-        
-        #TODO: get targets
         
         dt = self.env.dt
         y = np.cos(ob[1])
         ydot = -np.sin(ob[1]) * ob[3]
         u = action[0]
+        actdot = 0.5 * u * u
         
         act = 0.5 * u * u * dt
         
         self.total_energy += act
-
-        actdot = 0.5 * u * u
+        total_reward = 0.0
         
-        reward1 = (y - target_y)
-        reward2 = (self.total_energy - target_act)
+        if self.target1:
+            target_y = float(self.target1)
+            reward1 = (y - target_y)
+            total_reward += -reward1 * ydot
         
-        total_reward = -reward1 * ydot + -reward2 * actdot
-        
+        if self.target2:
+            target_act = float(self.target2  )
+            reward2 = (self.total_energy - target_act)
+            total_reward += -reward2 * actdot
         
         
         # TAO: @Andy you can recalculate reward here.

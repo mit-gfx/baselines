@@ -78,9 +78,9 @@ def mujoco_arg_parser():
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
     parser.add_argument('--num-timesteps', type=int, default=int(1e6))
     parser.add_argument('--play', default=False, action='store_true')    
-    parser.add_argument('--target1', default = 1.0)
-    parser.add_argument('--target2', default = 0.5)
-    parser.add_argument('--target3', default = 0.5)
+    parser.add_argument('--target1', default = None)
+    parser.add_argument('--target2', default = None)
+    parser.add_argument('--target3', default = None)
     parser.add_argument('--output_prefix', default = 'output')
     parser.add_argument('--input_file', default=None)   
     return parser

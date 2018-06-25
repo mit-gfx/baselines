@@ -282,7 +282,7 @@ def learn(env, policy_fn, *,
             print('minimized!')
             return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set)
             return pi
-        print(np.mean(list(map(np.linalg.norm, gradient_set[gradient_indices]))))
+        print(np.mean(list(map(np.linalg.norm, np.array(gradient_set)))))
         logger.log("Evaluating losses...")
         losses = []        
         for batch in d.iterate_once(optim_batchsize):
