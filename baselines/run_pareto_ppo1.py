@@ -76,7 +76,7 @@ def train(env_id, num_timesteps, seed, target1, target2, target3, output_prefix,
             output_prefix=output_prefix,
             timesteps_per_actorbatch= 2048 * 10,
             clip_param=0.2, entcoeff=0.0,
-            optim_epochs=10, optim_stepsize=3e-4, optim_batchsize=64 * 10,
+            optim_epochs=10, optim_stepsize=3e-3, optim_batchsize=64 * 10,
             gamma=0.99, lam=0.95, schedule='linear', sim=sim, hessians=hessians, model_path=model_path
         )
     env.close()
@@ -86,12 +86,14 @@ def train(env_id, num_timesteps, seed, target1, target2, target3, output_prefix,
     return pi
 
 def main():
-    logger.configure()
+    
     parser = mujoco_arg_parser()
     parser.add_argument('--model-path')
     parser.add_argument('--sim', default=False, action='store_true') 
     parser.add_argument('--hessians', default=False, action='store_true') 
+    parser.add_argument('--logdir', type=str, default=None)   
     args = parser.parse_args()
+    logger.configure(args.logdir)
 
     if not args.model_path:
         raise ValueError('You have to provide a model path.')

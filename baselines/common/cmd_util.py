@@ -82,7 +82,7 @@ def mujoco_arg_parser():
     parser.add_argument('--target2', default = None)
     parser.add_argument('--target3', default = None)
     parser.add_argument('--output_prefix', default = 'output')
-    parser.add_argument('--input_file', default=None)   
+    parser.add_argument('--input_file', default=None)       
     return parser
 
 def robotics_arg_parser():
