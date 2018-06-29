@@ -11,6 +11,7 @@ import IPython
 from baselines.common.math_util import ReadMatrixFromFile, WriteMatrixToFile
 from functools import reduce
 from operator import mul
+import os
 
 def traj_segment_generator(pi, env, horizon, stochastic):
     t = 0
@@ -146,8 +147,14 @@ def learn(env, policy_fn, *,
         schedule='constant', # annealing for stepsize parameters (epsilon and adam)
         gradients=True,
         hessians=False,
+        model_path='model',
         output_prefix,
         sim):
+        
+    #Directory setup:
+    model_dir = 'models/'
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
     # Setup losses and stuff
     # ----------------------------------------
     ob_space = env.observation_space
@@ -309,6 +316,8 @@ def learn(env, policy_fn, *,
         logger.record_tabular("TimeElapsed", time.time() - tstart)
         if MPI.COMM_WORLD.Get_rank()==0:
             logger.dump_tabular()
+        if iters_so_far > 1:
+            U.save_state(model_dir + model_path + str(iters_so_far))
 
     print('out of time')
     return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set)

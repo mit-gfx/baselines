@@ -74,10 +74,10 @@ def train(env_id, num_timesteps, seed, target1, target2, target3, output_prefix,
     pi = pposgd_simple.learn(env, policy_fn,
             max_timesteps=num_timesteps,
             output_prefix=output_prefix,
-            timesteps_per_actorbatch= (2048 * 6),
+            timesteps_per_actorbatch= 2048 * 10,
             clip_param=0.2, entcoeff=0.0,
-            optim_epochs=10, optim_stepsize=1e-2, optim_batchsize=2048,
-            gamma=0.99, lam=0.95, schedule='linear', sim=sim, hessians=hessians
+            optim_epochs=10, optim_stepsize=3e-4, optim_batchsize=64 * 10,
+            gamma=0.99, lam=0.95, schedule='linear', sim=sim, hessians=hessians, model_path=model_path
         )
     env.close()
     if model_path:
@@ -102,10 +102,10 @@ def main():
     else:       
         # construct the model object, load pre-trained model and render
         pi = train(args.env, num_timesteps=1, seed=args.seed, target1 = args.target1, target2 = args.target2, target3 = args.target3, output_prefix = args.output_prefix, input_file = args.input_file, sim=False)
-        U.load_state(args.model_path)
+        U.load_state('models/' + args.model_path)
         env = make_pareto_mujoco_env(args.env, seed=0, target1=args.target1, target2=args.target2, target3=args.target3)
 
-        ob = env.reset()
+        ob = env.reset()        
         while True:
             action = pi.act(stochastic=False, ob=ob)[0]
             ob, _, done, _ =  env.step(action)

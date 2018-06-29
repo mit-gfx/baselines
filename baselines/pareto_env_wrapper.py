@@ -66,18 +66,21 @@ class InvertedPendulumParetoWrapper(InvertedPendulumEnv):
         
         if self.target1:
             target_y = float(self.target1)
-            reward1 = (y - target_y)
-            total_reward += -reward1 * ydot
+            total_reward += -np.linalg.norm(y - target_y)
+        #    target_y = float(self.target1)
+        #    reward1 = (y - target_y)
+        #    total_reward += -reward1 * ydot
         
         if self.target2:
-            target_act = float(self.target2  )
-            reward2 = (self.total_energy - target_act)
+            target_act = float(self.target2)
+            reward2 = (act - target_act)
             total_reward += -reward2 * actdot
         
-        
+   
         # TAO: @Andy you can recalculate reward here.
         # You can unpack ob to get positions and velocities. Read
         # gym/env/mujoco/inverted_pendulum.py to see the full definition of ob.
+        #print(self.total_energy)
         return ob, total_reward, done, info
 
     def reset(self):
