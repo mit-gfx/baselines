@@ -45,7 +45,8 @@ class InvertedPendulumParetoWrapper(InvertedPendulumEnv):
         self.total_energy = 0.0
 
     def step(self, action):
-        # TAO: @Andy you can clamp action here.
+        action = np.maximum(np.minimum(action, 2.0), -2.0)
+        
         ob, reward, done, info = self.env.step(action)
         
         #General rule:

@@ -90,7 +90,7 @@ def initialize():
 
 def normc_initializer(std=1.0, axis=0):
     def _initializer(shape, dtype=None, partition_info=None):  # pylint: disable=W0613
-        out = np.random.randn(*shape).astype(np.float32)
+        out = np.random.randn(*shape).astype(np.float64)
         out *= std / np.sqrt(np.square(out).sum(axis=axis, keepdims=True))
         return tf.constant(out)
     return _initializer
@@ -104,12 +104,12 @@ def file_initializer(file_path, start_idx, std=1.0, axis=0):
     def _initializer(shape, dtype=None, partition_info=None):
         num = reduce(lambda x, y: x*y, shape)
         out = data[start_idx : start_idx + num]
-        out = out.reshape(shape).astype(np.float32)
+        out = out.reshape(shape).astype(np.float64)
         out *= std / np.sqrt(np.square(out).sum(axis=axis, keepdims=True))
         return tf.constant(out)
     return _initializer
 
-def conv2d(x, num_filters, name, filter_size=(3, 3), stride=(1, 1), pad="SAME", dtype=tf.float32, collections=None,
+def conv2d(x, num_filters, name, filter_size=(3, 3), stride=(1, 1), pad="SAME", dtype=tf.float64, collections=None,
            summary_tag=None):
     with tf.variable_scope(name):
         stride_shape = [1, stride[0], stride[1], 1]
@@ -152,8 +152,8 @@ def function(inputs, outputs, updates=None, givens=None):
     on placeholder name (passed to constructor or accessible via placeholder.op.name).
 
     Example:
-        x = tf.placeholder(tf.int32, (), name="x")
-        y = tf.placeholder(tf.int32, (), name="y")
+        x = tf.placeholder(tf.int64, (), name="x")
+        y = tf.placeholder(tf.int64, (), name="y")
         z = 3 * x + 2 * y
         lin = function([x, y], z, givens={y: 0})
 
@@ -238,7 +238,7 @@ def flatgrad(loss, var_list, clip_norm=None):
     ])
 
 #Courtesy: https://stackoverflow.com/questions/42157781/block-diagonal-matrices-in-tensorflow
-def block_diagonal(matrices, dtype=tf.float32):
+def block_diagonal(matrices, dtype=tf.float64):
   r"""Constructs block-diagonal matrices from a list of batched 2D tensors.
 
   Args:
@@ -306,7 +306,7 @@ def flathess(loss, var_list, clip_norm=None):
     return block_diagonal(hessians)
 
 class SetFromFlat(object):
-    def __init__(self, var_list, dtype=tf.float32):
+    def __init__(self, var_list, dtype=tf.float64):
         assigns = []
         shapes = list(map(var_shape, var_list))
         total_size = np.sum([intprod(shape) for shape in shapes])

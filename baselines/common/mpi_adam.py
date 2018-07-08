@@ -2,37 +2,60 @@ from mpi4py import MPI
 import baselines.common.tf_util as U
 import tensorflow as tf
 import numpy as np
+import IPython
 
 class MpiAdam(object):
-    def __init__(self, var_list, *, beta1=0.9, beta2=0.999, epsilon=1e-08, scale_grad_by_procs=True, comm=None):
+    def __init__(self, var_list, *, beta1=0.9, beta2=0.999, epsilon=1e-08, scale_grad_by_procs=True, comm=None, loss=None):
         self.var_list = var_list
         self.beta1 = beta1
         self.beta2 = beta2
         self.epsilon = epsilon
         self.scale_grad_by_procs = scale_grad_by_procs
         size = sum(U.numel(v) for v in var_list)
-        self.m = np.zeros(size, 'float32')
-        self.v = np.zeros(size, 'float32')
+        self.m = np.zeros(size, 'float64')
+        self.v = np.zeros(size, 'float64')
         self.t = 0
         self.setfromflat = U.SetFromFlat(var_list)
         self.getflat = U.GetFlat(var_list)
         self.comm = MPI.COMM_WORLD if comm is None else comm
+        self.loss = loss
 
-    def update(self, localg, stepsize):
+    def update(self, localg, stepsize, ob, ac, atarg,vtarg, cur_lrmult):
         if self.t % 100 == 0:
             self.check_synced()
-        localg = localg.astype('float32')
+        localg = localg.astype('float64')
         globalg = np.zeros_like(localg)
         self.comm.Allreduce(localg, globalg, op=MPI.SUM)
         if self.scale_grad_by_procs:
-            globalg /= self.comm.Get_size()
-
-        self.t += 1
-        a = stepsize * np.sqrt(1 - self.beta2**self.t)/(1 - self.beta1**self.t)
-        self.m = self.beta1 * self.m + (1 - self.beta1) * globalg
-        self.v = self.beta2 * self.v + (1 - self.beta2) * (globalg * globalg)
-        step = (- a) * self.m / (np.sqrt(self.v) + self.epsilon)
-        self.setfromflat(self.getflat() + step)
+            globalg /= self.comm.Get_size()                                           
+         #attempt line search
+        cur_var_list = self.getflat()
+        *initlosses, _ = self.loss(ob, ac, atarg,vtarg, cur_lrmult)
+        if self.loss:
+            while True:
+                t = self.t + 1
+                a = stepsize * np.sqrt(1 - self.beta2**t)/(1 - self.beta1**t)        
+                m = self.beta1 * self.m + (1 - self.beta1) * globalg
+                v = self.beta2 * self.v + (1 - self.beta2) * (globalg * globalg)
+                step = (- a) * m / (np.sqrt(v) + self.epsilon)
+                self.setfromflat(cur_var_list + step)
+                *newlosses, _ = self.loss(ob, ac, atarg,vtarg, cur_lrmult)
+                if newlosses[2] > initlosses[2]:
+                    stepsize /= 2
+                else:
+                    #print('break ' + str(stepsize))
+                    #print('step ' + str(step))
+                    break
+        else:
+            t = self.t + 1
+            a = stepsize * np.sqrt(1 - self.beta2**t)/(1 - self.beta1**t)        
+            m = self.beta1 * m + (1 - self.beta1) * globalg
+            v = self.beta2 * v + (1 - self.beta2) * (globalg * globalg)
+            step = (- a) * m / (np.sqrt(v) + self.epsilon)
+        self.t = t
+        self.m = m
+        self.v = v
+        self.setfromflat(cur_var_list + step)
 
     def sync(self):
         theta = self.getflat()
@@ -54,8 +77,8 @@ def test_MpiAdam():
     np.random.seed(0)
     tf.set_random_seed(0)
 
-    a = tf.Variable(np.random.randn(3).astype('float32'))
-    b = tf.Variable(np.random.randn(2,5).astype('float32'))
+    a = tf.Variable(np.random.randn(3).astype('float64'))
+    b = tf.Variable(np.random.randn(2,5).astype('float64'))
     loss = tf.reduce_sum(tf.square(a)) + tf.reduce_sum(tf.sin(b))
 
     stepsize = 1e-2

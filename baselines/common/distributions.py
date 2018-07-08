@@ -3,6 +3,7 @@ import numpy as np
 import baselines.common.tf_util as U
 from baselines.a2c.utils import fc
 from tensorflow.python.ops import math_ops
+import IPython
 
 class Pd(object):
     """
@@ -42,7 +43,7 @@ class PdType(object):
         raise NotImplementedError
 
     def param_placeholder(self, prepend_shape, name=None):
-        return tf.placeholder(dtype=tf.float32, shape=prepend_shape+self.param_shape(), name=name)
+        return tf.placeholder(dtype=tf.float64, shape=prepend_shape+self.param_shape(), name=name)
     def sample_placeholder(self, prepend_shape, name=None):
         return tf.placeholder(dtype=self.sample_dtype(), shape=prepend_shape+self.sample_shape(), name=name)
 
@@ -60,7 +61,7 @@ class CategoricalPdType(PdType):
     def sample_shape(self):
         return []
     def sample_dtype(self):
-        return tf.int32
+        return tf.int64
 
 
 class MultiCategoricalPdType(PdType):
@@ -75,7 +76,7 @@ class MultiCategoricalPdType(PdType):
     def sample_shape(self):
         return [len(self.ncats)]
     def sample_dtype(self):
-        return tf.int32
+        return tf.int64
 
 class DiagGaussianPdType(PdType):
     def __init__(self, size):
@@ -94,7 +95,7 @@ class DiagGaussianPdType(PdType):
     def sample_shape(self):
         return [self.size]
     def sample_dtype(self):
-        return tf.float32
+        return tf.float64
 
 class BernoulliPdType(PdType):
     def __init__(self, size):
@@ -106,7 +107,7 @@ class BernoulliPdType(PdType):
     def sample_shape(self):
         return [self.size]
     def sample_dtype(self):
-        return tf.int32
+        return tf.int64
 
 # WRONG SECOND DERIVATIVES
 # class CategoricalPd(Pd):
@@ -175,7 +176,7 @@ class MultiCategoricalPd(Pd):
     def flatparam(self):
         return self.flat
     def mode(self):
-        return tf.cast(tf.stack([p.mode() for p in self.categoricals], axis=-1), tf.int32)
+        return tf.cast(tf.stack([p.mode() for p in self.categoricals], axis=-1), tf.int64)
     def neglogp(self, x):
         return tf.add_n([p.neglogp(px) for p, px in zip(self.categoricals, tf.unstack(x, axis=-1))])
     def kl(self, other):
@@ -183,7 +184,7 @@ class MultiCategoricalPd(Pd):
     def entropy(self):
         return tf.add_n([p.entropy() for p in self.categoricals])
     def sample(self):
-        return tf.cast(tf.stack([p.sample() for p in self.categoricals], axis=-1), tf.int32)
+        return tf.cast(tf.stack([p.sample() for p in self.categoricals], axis=-1), tf.int64)
     @classmethod
     def fromflat(cls, flat):
         raise NotImplementedError
@@ -201,7 +202,7 @@ class DiagGaussianPd(Pd):
         return self.mean
     def neglogp(self, x):
         return 0.5 * tf.reduce_sum(tf.square((x - self.mean) / self.std), axis=-1) \
-               + 0.5 * np.log(2.0 * np.pi) * tf.to_float(tf.shape(x)[-1]) \
+               + 0.5 * np.log(2.0 * np.pi) * tf.to_double(tf.shape(x)[-1]) \
                + tf.reduce_sum(self.logstd, axis=-1)
     def kl(self, other):
         assert isinstance(other, DiagGaussianPd)
@@ -209,7 +210,7 @@ class DiagGaussianPd(Pd):
     def entropy(self):
         return tf.reduce_sum(self.logstd + .5 * np.log(2.0 * np.pi * np.e), axis=-1)
     def sample(self):
-        return self.mean + self.std * tf.random_normal(tf.shape(self.mean))
+        return self.mean + self.std * tf.random_normal(tf.shape(self.mean), dtype=tf.float64)
     @classmethod
     def fromflat(cls, flat):
         return cls(flat)
@@ -223,14 +224,14 @@ class BernoulliPd(Pd):
     def mode(self):
         return tf.round(self.ps)
     def neglogp(self, x):
-        return tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logits, labels=tf.to_float(x)), axis=-1)
+        return tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logits, labels=tf.to_double(x)), axis=-1)
     def kl(self, other):
         return tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(logits=other.logits, labels=self.ps), axis=-1) - tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logits, labels=self.ps), axis=-1)
     def entropy(self):
         return tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logits, labels=self.ps), axis=-1)
     def sample(self):
         u = tf.random_uniform(tf.shape(self.ps))
-        return tf.to_float(math_ops.less(u, self.ps))
+        return tf.to_double(math_ops.less(u, self.ps))
     @classmethod
     def fromflat(cls, flat):
         return cls(flat)

@@ -15,6 +15,7 @@ from baselines.common.input import observation_input
 from baselines import deepq
 from baselines.deepq.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
 from baselines.deepq.utils import ObservationInput
+import IPython
 
 
 class ActWrapper(object):
@@ -177,7 +178,7 @@ def learn(env,
     def make_obs_ph(name):
         return ObservationInput(env.observation_space, name=name)
 
-    act, train, update_target, debug = deepq.build_train(
+    act, train, update_target, grads, debug = deepq.build_train(
         make_obs_ph=make_obs_ph,
         q_func=q_func,
         num_actions=env.action_space.n,
@@ -194,6 +195,8 @@ def learn(env,
     }
 
     act = ActWrapper(act, act_params)
+    
+
 
     # Create the replay buffer
     if prioritized_replay:
@@ -213,7 +216,7 @@ def learn(env,
 
     # Initialize the parameters and copy them to the target network.
     U.initialize()
-    update_target()
+
 
     episode_rewards = [0.0]
     saved_mean_reward = None
@@ -256,6 +259,7 @@ def learn(env,
             # Store transition in the replay buffer.
             replay_buffer.add(obs, action, rew, new_obs, float(done))
             obs = new_obs
+            first_time = True
 
             episode_rewards[-1] += rew
             if done:
@@ -272,13 +276,23 @@ def learn(env,
                     obses_t, actions, rewards, obses_tp1, dones = replay_buffer.sample(batch_size)
                     weights, batch_idxes = np.ones_like(rewards), None
                 td_errors = train(obses_t, actions, rewards, obses_tp1, dones, weights)
+                #print(np.mean(td_errors))
                 if prioritized_replay:
                     new_priorities = np.abs(td_errors) + prioritized_replay_eps
                     replay_buffer.update_priorities(batch_idxes, new_priorities)
 
             if t > learning_starts and t % target_network_update_freq == 0:
+                if first_time:
+                    holdout_experience = (obses_t, actions, rewards, obses_tp1, dones, weights, batch_idxes)
+                    (holdout_obses_t, holdout_actions, holdout_rewards, holdout_obses_tp1, holdout_dones, holdout_weights, holdout_batch_idxes) = holdout_experience
+                    first_time = False
                 # Update target network periodically.
+                #IPython.embed()                
+                error, grad = grads(holdout_obses_t, holdout_actions, holdout_rewards, holdout_obses_tp1, holdout_dones, holdout_weights)
+                print(np.mean(error)             )
+                print(np.linalg.norm(np.abs(grad)))
                 update_target()
+                
 
             mean_100ep_reward = round(np.mean(episode_rewards[-101:-1]), 1)
             num_episodes = len(episode_rewards)

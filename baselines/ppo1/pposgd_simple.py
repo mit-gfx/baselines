@@ -12,6 +12,9 @@ from baselines.common.math_util import ReadMatrixFromFile, WriteMatrixToFile
 from functools import reduce
 from operator import mul
 import os
+import random
+
+np.set_printoptions(threshold=np.nan)
 
 def traj_segment_generator(pi, env, horizon, stochastic):
     t = 0
@@ -26,15 +29,16 @@ def traj_segment_generator(pi, env, horizon, stochastic):
 
     # Initialize history arrays
     obs = np.array([ob for _ in range(horizon)])
-    rews = np.zeros(horizon, 'float32')
-    vpreds = np.zeros(horizon, 'float32')
-    news = np.zeros(horizon, 'int32')
+    rews = np.zeros(horizon, 'float64')
+    vpreds = np.zeros(horizon, 'float64')
+    news = np.zeros(horizon, 'int64')
     acs = np.array([ac for _ in range(horizon)])
     prevacs = acs.copy()
 
     while True:
         prevac = ac
         ac, vpred = pi.act(stochastic, ob)
+        ac = ac * 0.0 + 1.0
         # Slight weirdness here because we need value function at time T
         # before returning segment [0, T-1] so we get the correct
         # terminal value
@@ -73,7 +77,7 @@ def add_vtarg_and_adv(seg, gamma, lam):
     new = np.append(seg["new"], 0) # last element is only used for last vtarg, but we already zeroed it if last new = 1
     vpred = np.append(seg["vpred"], seg["nextvpred"])
     T = len(seg["rew"])
-    seg["adv"] = gaelam = np.empty(T, 'float32')
+    seg["adv"] = gaelam = np.empty(T, 'float64')
     rew = seg["rew"]
     lastgaelam = 0
     for t in reversed(range(T)):
@@ -152,6 +156,7 @@ def learn(env, policy_fn, *,
         sim):
         
     #Directory setup:
+    first_iter = True
     model_dir = 'models/'
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
@@ -161,10 +166,10 @@ def learn(env, policy_fn, *,
     ac_space = env.action_space
     pi = policy_fn("pi", ob_space, ac_space) # Construct network for new policy
     oldpi = policy_fn("oldpi", ob_space, ac_space) # Network for old policy
-    atarg = tf.placeholder(dtype=tf.float32, shape=[None]) # Target advantage function (if applicable)
-    ret = tf.placeholder(dtype=tf.float32, shape=[None]) # Empirical return
+    atarg = tf.placeholder(dtype=tf.float64, shape=[None]) # Target advantage function (if applicable)
+    ret = tf.placeholder(dtype=tf.float64, shape=[None]) # Empirical return
 
-    lrmult = tf.placeholder(name='lrmult', dtype=tf.float32, shape=[]) # learning rate multiplier, updated with schedule
+    lrmult = tf.placeholder(name='lrmult', dtype=tf.float64, shape=[]) # learning rate multiplier, updated with schedule
     clip_param = clip_param * lrmult # Annealed cliping parameter epislon
 
     ob = U.get_placeholder_cached(name="ob")
@@ -181,7 +186,8 @@ def learn(env, policy_fn, *,
     surr2 = tf.clip_by_value(ratio, 1.0 - clip_param, 1.0 + clip_param) * atarg #
     pol_surr = - tf.reduce_mean(tf.minimum(surr1, surr2)) # PPO's pessimistic surrogate (L^CLIP)
     vf_loss = tf.reduce_mean(tf.square(pi.vpred - ret))
-    total_loss = pol_surr + pol_entpen + vf_loss
+    #total_loss = pol_surr + pol_entpen + vf_loss
+    total_loss = pol_surr * 0.0 + vf_loss
     losses = [pol_surr, pol_entpen, vf_loss, meankl, meanent]
     loss_names = ["pol_surr", "pol_entpen", "vf_loss", "kl", "ent"]
 
@@ -191,7 +197,9 @@ def learn(env, policy_fn, *,
     
     lossandgradandhessian = U.function([ob, ac, atarg, ret, lrmult], losses + [U.flatgrad(total_loss, var_list), U.flathess(total_loss, var_list)])
     lossandgrad = U.function([ob, ac, atarg, ret, lrmult], losses + [U.flatgrad(total_loss, var_list)])
-    adam = MpiAdam(var_list, epsilon=adam_epsilon)
+    adam = MpiAdam(var_list, epsilon=adam_epsilon, loss=lossandgrad)
+    optimizer = tf.train.GradientDescentOptimizer(0.5)
+    #optimizer = ScipyOptimizerInterface(lossandgrad, method='L-BFGS-B')
 
     assign_old_eq_new = U.function([],[], updates=[tf.assign(oldv, newv)
         for (oldv, newv) in zipsame(oldpi.get_variables(), pi.get_variables())])
@@ -205,8 +213,7 @@ def learn(env, policy_fn, *,
 
     # Prepare for rollouts
     # ----------------------------------------
-    seg_gen = traj_segment_generator(pi, env, timesteps_per_actorbatch, stochastic=True)
-
+    seg_gen = traj_segment_generator(pi, env, timesteps_per_actorbatch, stochastic=False)    
     episodes_so_far = 0
     timesteps_so_far = 0
     iters_so_far = 0
@@ -248,10 +255,12 @@ def learn(env, policy_fn, *,
             cur_lrmult =  max(1.0 - float(timesteps_so_far) / max_timesteps, 0)
         else:
             raise NotImplementedError
+        #IPython.embed()
 
         logger.log("********** Iteration %i ************"%iters_so_far)
 
         seg = seg_gen.__next__()
+        #print(seg['ob'])
         add_vtarg_and_adv(seg, gamma, lam)
 
         # ob, ac, atarg, ret, td1ret = map(np.concatenate, (obs, acs, atargs, rets, td1rets))
@@ -267,19 +276,42 @@ def learn(env, policy_fn, *,
         logger.log("Optimizing...")
         logger.log(fmt_row(13, loss_names))
         # Here we do a bunch of optimization epochs over the data                
-        for _ in range(optim_epochs):  
+        #for _ in range(optim_epochs):
+        while True:
             gradient_set = []
             losses = [] # list of tuples, each of which gives the loss for a minibatch
-            for batch in d.iterate_once(optim_batchsize):
+            '''
+            if first_iter:
+                holdout_batch = list(d.iterate_once(d.n))[0].copy()
+                holdout_cur_lrmult = cur_lrmult
+                first_iter = False
+            else:
+                elems = list(d.iterate_once(d.n))[0].copy()
+                holdout_batch["ob"] = np.append(holdout_batch["ob"], elems["ob"], axis=0)
+                holdout_batch["ac"] = np.append(holdout_batch["ac"], elems["ac"], axis=0)
+                holdout_batch["atarg"] = np.append(holdout_batch["atarg"], elems["atarg"], axis=0)
+                holdout_batch["vtarg"] = np.append(holdout_batch["vtarg"], elems["vtarg"], axis=0)
+            '''
+            for batch in d.iterate_once(optim_batchsize):                
                 *newlosses, g = lossandgrad(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
                 gradient_set.append(g)
-                if not sim:                     
-                    adam.update(g, optim_stepsize * cur_lrmult)
+                if not sim:
+                    #train = optimizer.minimize(log_x_squared)                     
+                    adam.update(g, optim_stepsize * cur_lrmult, batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
+                    print(str(np.linalg.norm(g)) + ' ' + str(newlosses[2]))
                 losses.append(newlosses)
-            logger.log(fmt_row(13, np.mean(losses, axis=0)))
+            #logger.log(fmt_row(13, np.mean(losses, axis=0)))
+            if np.linalg.norm(g) < 3e-3:
+                logger.log(fmt_row(13, np.mean(losses, axis=0)))                
+                break
+        #*holdout_newlosses, holdout_g = lossandgrad(holdout_batch["ob"], holdout_batch["ac"], holdout_batch["atarg"], holdout_batch["vtarg"], holdout_cur_lrmult)
         print('objective is')
-        print(np.sum(np.mean(losses, axis=0)[0:3]))    
-        print(get_model_vars(pi))
+        print(np.sum(newlosses[0:3]))  
+        print('gradient is')
+        print(np.mean(list(map(np.linalg.norm, np.array(g))))) 
+        print('data size is ')
+        #print(holdout_batch['ac'].shape)
+        #print(get_model_vars(pi))
         if sim:
             print('return routine')
             return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set)            
@@ -288,8 +320,7 @@ def learn(env, policy_fn, *,
             #TODO: abstract all this away somehow (scope)
             print('minimized!')
             return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set)
-            return pi
-        print(np.mean(list(map(np.linalg.norm, np.array(gradient_set)))))
+            return pi        
         logger.log("Evaluating losses...")
         losses = []        
         for batch in d.iterate_once(optim_batchsize):
@@ -316,6 +347,7 @@ def learn(env, policy_fn, *,
         logger.record_tabular("TimeElapsed", time.time() - tstart)
         if MPI.COMM_WORLD.Get_rank()==0:
             logger.dump_tabular()
+
         if iters_so_far > 1:
             U.save_state(model_dir + model_path + str(iters_so_far))
 

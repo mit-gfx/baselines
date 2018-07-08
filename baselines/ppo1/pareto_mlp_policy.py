@@ -18,7 +18,7 @@ class ParetoMlpPolicy(object):
         self.pdtype = pdtype = make_pdtype(ac_space)
         sequence_length = None
 
-        ob = U.get_placeholder(name="ob", dtype=tf.float32, shape=[sequence_length] + list(ob_space.shape))
+        ob = U.get_placeholder(name="ob", dtype=tf.float64, shape=[sequence_length] + list(ob_space.shape))
 
         with tf.variable_scope("obfilter"):
             self.ob_rms = RunningMeanStd(shape=ob_space.shape)
@@ -42,7 +42,7 @@ class ParetoMlpPolicy(object):
             if gaussian_fixed_var and isinstance(ac_space, gym.spaces.Box):
                 mean = tf.layers.dense(last_out, pdtype.param_shape()[0]//2, name='final', kernel_initializer=U.file_initializer(file_path, start_idx))
                 start_idx += int(list(last_out.shape)[-1]) * pdtype.param_shape()[0]//2
-                logstd = tf.get_variable(name="logstd", shape=[1, pdtype.param_shape()[0]//2], initializer=U.file_initializer(file_path, start_idx))
+                logstd = tf.get_variable(name="logstd", shape=[1, pdtype.param_shape()[0]//2], dtype=tf.float64, initializer=U.file_initializer(file_path, start_idx))
                 pdparam = tf.concat([mean, mean * 0.0 + logstd], axis=1)
             else:
                 # TAO: I assume this branch won't be called.

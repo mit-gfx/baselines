@@ -11,7 +11,7 @@ def ReadMatrixFromFile(file_name):
     m = np.array(data)
     m = np.reshape(m, (row, col), 'F')
 
-    return m.astype(np.float32)
+    return m.astype(np.float64)
 
 def WriteMatrixToFile(file_name, matrix):
     # First, get the row and col of the array.
@@ -23,7 +23,7 @@ def WriteMatrixToFile(file_name, matrix):
     row_bytes = row.to_bytes(4, sys.byteorder, signed=True)
     col_bytes = col.to_bytes(4, sys.byteorder, signed=True)
     # Second, get the raw data.
-    data_bytes = matrix.astype(np.float32, 'F').tobytes('F')
+    data_bytes = matrix.astype(np.float64, 'F').tobytes('F')
     # Finally, write the binary file.
     f = open(file_name, 'w+b')
     content = b"".join([row_bytes, col_bytes, data_bytes])
@@ -102,7 +102,7 @@ def discount_with_boundaries(X, New, gamma):
 
 def test_discount_with_boundaries():
     gamma=0.9
-    x = np.array([1.0, 2.0, 3.0, 4.0], 'float32')
+    x = np.array([1.0, 2.0, 3.0, 4.0], 'float64')
     starts = [1.0, 0.0, 0.0, 1.0]
     y = discount_with_boundaries(x, starts, gamma)
     assert np.allclose(y, [

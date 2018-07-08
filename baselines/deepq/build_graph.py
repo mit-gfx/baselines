@@ -95,6 +95,8 @@ The functions in this file can are used to create the following functions:
 """
 import tensorflow as tf
 import baselines.common.tf_util as U
+import IPython
+import numpy as np
 
 
 def scope_vars(scope, trainable_only=False):
@@ -313,6 +315,12 @@ def build_act_with_param_noise(make_obs_ph, q_func, num_actions, scope="deepq", 
             return _act(ob, stochastic, update_eps, reset, update_param_noise_threshold, update_param_noise_scale)
         return act
 
+def numel(var):
+    shape = list(var.shape)
+    output = 1
+    for val in shape:
+        output *= int(val)
+    return output
 
 def build_train(make_obs_ph, q_func, num_actions, optimizer, grad_norm_clipping=None, gamma=1.0,
     double_q=True, scope="deepq", reuse=None, param_noise=False, param_noise_filter_func=None):
@@ -414,12 +422,17 @@ def build_train(make_obs_ph, q_func, num_actions, optimizer, grad_norm_clipping=
 
         # compute optimization op (potentially with gradient clipping)
         if grad_norm_clipping is not None:
-            gradients = optimizer.compute_gradients(weighted_error, var_list=q_func_vars)
+            gradients = optimizer.compute_gradients(weighted_error, var_list=q_func_vars)            
             for i, (grad, var) in enumerate(gradients):
                 if grad is not None:
-                    gradients[i] = (tf.clip_by_norm(grad, grad_norm_clipping), var)
+                    gradients[i] = (tf.clip_by_norm(grad, grad_norm_clipping), var)            
+            gradients_flat = tf.concat(axis=0, values=[
+                        tf.reshape(grad if grad is not None else tf.zeros_like(v), [numel(v)])
+                        for (v, grad) in gradients])            
             optimize_expr = optimizer.apply_gradients(gradients)
         else:
+            print('else block')
+            IPython.embed()
             optimize_expr = optimizer.minimize(weighted_error, var_list=q_func_vars)
 
         # update_target_fn will be called periodically to copy Q network to target Q network
@@ -443,7 +456,15 @@ def build_train(make_obs_ph, q_func, num_actions, optimizer, grad_norm_clipping=
             updates=[optimize_expr]
         )
         update_target = U.function([], [], updates=[update_target_expr])
+        lossandgrad = U.function([
+                obs_t_input,
+                act_t_ph,
+                rew_t_ph,
+                obs_tp1_input,
+                done_mask_ph,
+                importance_weights_ph
+            ], [weighted_error, gradients_flat])
 
         q_values = U.function([obs_t_input], q_t)
 
-        return act_f, train, update_target, {'q_values': q_values}
+        return act_f, train, update_target, lossandgrad, {'q_values': q_values}
