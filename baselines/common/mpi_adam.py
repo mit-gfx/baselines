@@ -34,10 +34,12 @@ class MpiAdam(object):
         if self.loss:
             while True:
                 t = self.t + 1
+                t = 1.0
                 a = stepsize * np.sqrt(1 - self.beta2**t)/(1 - self.beta1**t)        
                 m = self.beta1 * self.m + (1 - self.beta1) * globalg
                 v = self.beta2 * self.v + (1 - self.beta2) * (globalg * globalg)
-                step = (- a) * m / (np.sqrt(v) + self.epsilon)
+                #step = (- a) * m / (np.sqrt(v) + self.epsilon)
+                step = -stepsize * globalg
                 self.setfromflat(cur_var_list + step)
                 *newlosses, _ = self.loss(ob, ac, atarg,vtarg, cur_lrmult)
                 if newlosses[2] > initlosses[2]:

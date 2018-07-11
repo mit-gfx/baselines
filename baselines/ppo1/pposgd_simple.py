@@ -198,7 +198,7 @@ def learn(env, policy_fn, *,
     lossandgradandhessian = U.function([ob, ac, atarg, ret, lrmult], losses + [U.flatgrad(total_loss, var_list), U.flathess(total_loss, var_list)])
     lossandgrad = U.function([ob, ac, atarg, ret, lrmult], losses + [U.flatgrad(total_loss, var_list)])
     adam = MpiAdam(var_list, epsilon=adam_epsilon, loss=lossandgrad)
-    optimizer = tf.train.GradientDescentOptimizer(0.5)
+    #optimizer = tf.train.GradientDescentOptimizer(0.5)
     #optimizer = ScipyOptimizerInterface(lossandgrad, method='L-BFGS-B')
 
     assign_old_eq_new = U.function([],[], updates=[tf.assign(oldv, newv)
@@ -282,7 +282,7 @@ def learn(env, policy_fn, *,
         
         do = True
         #while True:
-        for i in range(100):
+        for i in range(1):
             gradient_set = []
             losses = [] # list of tuples, each of which gives the loss for a minibatch
             '''
@@ -299,19 +299,23 @@ def learn(env, policy_fn, *,
             '''            
             
             for batch in d.iterate_once(optim_batchsize):                                
-                *newlosses, g = lossandgrad(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
+                *newlosses, g, h = lossandgradandhessian(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
                 if do:
                     print('gradient before is ' + str(np.linalg.norm(g)))
                     print('loss before is ' + str(newlosses[2]))
                     do = False
                 gradient_set.append(g)
                 if not sim:
+                    #IPython.embed()
+                    #direc = tf.linalg.lstsq(tf.linalg.inv(h), g)
+                    direc,_,_,_ = np.linalg.lstsq(h, g)
+                    #direc = tf.tensordot(tf.linalg.inv(h), g, axes=1)
                     #train = optimizer.minimize(log_x_squared)                     
-                    adam.update(g, optim_stepsize * cur_lrmult, batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
-                    #print(str(np.linalg.norm(g)) + ' ' + str(newlosses[2]))
+                    adam.update(direc, optim_stepsize * cur_lrmult, batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
+                    print(str(np.linalg.norm(g)) + ' ' + str(newlosses[2]))
                 losses.append(newlosses)
             #logger.log(fmt_row(13, np.mean(losses, axis=0)))
-            if np.linalg.norm(g) < 1e-4:
+            if np.linalg.norm(g) < 1e-2:
                 logger.log(fmt_row(13, np.mean(losses, axis=0)))                
                 break
         #*holdout_newlosses, holdout_g = lossandgrad(holdout_batch["ob"], holdout_batch["ac"], holdout_batch["atarg"], holdout_batch["vtarg"], holdout_cur_lrmult)

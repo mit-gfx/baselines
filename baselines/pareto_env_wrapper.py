@@ -68,6 +68,7 @@ class InvertedPendulumParetoWrapper(InvertedPendulumEnv):
         if self.target1:
             target_y = float(self.target1)
             total_reward += -np.linalg.norm(y - target_y)
+            #total_reward += 1.0
         #    target_y = float(self.target1)
         #    reward1 = (y - target_y)
         #    total_reward += -reward1 * ydot
