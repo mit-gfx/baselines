@@ -74,9 +74,9 @@ def train(env_id, num_timesteps, seed, target1, target2, target3, output_prefix,
     pi = pposgd_simple.learn(env, policy_fn,
             max_timesteps=num_timesteps,
             output_prefix=output_prefix,
-            timesteps_per_actorbatch= 2000,
+            timesteps_per_actorbatch= 100000,
             clip_param=0.2, entcoeff=0.0,
-            optim_epochs=1000000, optim_stepsize=1.0, optim_batchsize=2000,
+            optim_epochs=1000000, optim_stepsize=3.0e-2, optim_batchsize=100000,
             gamma=0.99, lam=0.95, schedule='linear', sim=sim, hessians=hessians, model_path=model_path
         )
     env.close()

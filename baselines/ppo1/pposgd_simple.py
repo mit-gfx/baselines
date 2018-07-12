@@ -38,7 +38,7 @@ def traj_segment_generator(pi, env, horizon, stochastic):
     while True:
         prevac = ac
         ac, vpred = pi.act(stochastic, ob)
-        ac = ac * 0.0 + 1.0
+        #ac = ac * 0.0 + 1.0
         # Slight weirdness here because we need value function at time T
         # before returning segment [0, T-1] so we get the correct
         # terminal value
