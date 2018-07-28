@@ -12,6 +12,7 @@ from baselines.common.math_util import ReadMatrixFromFile, WriteMatrixToFile
 from functools import reduce
 from operator import mul
 import os
+from itertools import product
 
 def traj_segment_generator(pi, env, horizon, stochastic):
     t = 0
@@ -110,24 +111,28 @@ def get_gradient_indices(pi):
     return ret_vars
         
 
-def return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set):
+def return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set, seg):
+    
     gradient_indices = get_gradient_indices(pi)
+    
+    rets = seg["ep_rets"]
+    mean_ret = np.mean(rets)
     
     if hessians:
         hessian_set = []
         
         for batch in d.iterate_once(d.n):
             *newlosses, g, h = lossandgradandhessian(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
-            hessian_set.extend(h)
+            hessian_set.append(h)
         mean_hessian = np.mean(hessian_set, axis=0)
-        mean_hessian = mean_hessian[gradient_indices, gradient_indices]
+        mean_hessian = mean_hessian[np.ix_(gradient_indices,gradient_indices)]
         WriteMatrixToFile(output_prefix + '_hessian.bin', mean_hessian)
     if gradients:
         mean_gradient = np.mean(gradient_set, axis=0)
         mean_gradient = mean_gradient[gradient_indices]
         WriteMatrixToFile(output_prefix + '_gradient.bin', mean_gradient)
     mean_objective = np.sum(np.mean(losses, axis=0)[0:3])
-    WriteMatrixToFile(output_prefix + '_objective.bin', np.array([[mean_objective]]))
+    WriteMatrixToFile(output_prefix + '_objective.bin', np.array([[mean_ret]]))
     
     model_vars = np.array(get_model_vars(pi))[gradient_indices]
     WriteMatrixToFile(output_prefix + '_vars.bin', np.array(model_vars))
@@ -282,12 +287,12 @@ def learn(env, policy_fn, *,
         print(get_model_vars(pi))
         if sim:
             print('return routine')
-            return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set)            
+            return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set, seg)            
             return pi
         if np.mean(list(map(np.linalg.norm, gradient_set))) < 1e-4: #TODO: make this a variable
             #TODO: abstract all this away somehow (scope)
             print('minimized!')
-            return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set)
+            return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set, seg)
             return pi
         print(np.mean(list(map(np.linalg.norm, np.array(gradient_set)))))
         logger.log("Evaluating losses...")
@@ -301,6 +306,7 @@ def learn(env, policy_fn, *,
             logger.record_tabular("loss_"+name, lossval)
         logger.record_tabular("ev_tdlam_before", explained_variance(vpredbefore, tdlamret))
         lrlocal = (seg["ep_lens"], seg["ep_rets"]) # local values
+        IPython.embed()
         listoflrpairs = MPI.COMM_WORLD.allgather(lrlocal) # list of tuples
         lens, rews = map(flatten_lists, zip(*listoflrpairs))
         lenbuffer.extend(lens)
@@ -320,7 +326,7 @@ def learn(env, policy_fn, *,
             U.save_state(model_dir + model_path + str(iters_so_far))
 
     print('out of time')
-    return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set)
+    return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set, seg)
     return pi
 
 def flatten_lists(listoflists):
