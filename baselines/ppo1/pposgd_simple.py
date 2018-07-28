@@ -87,7 +87,7 @@ def add_vtarg_and_adv(seg, gamma, lam):
 
 
 def get_model_vars(pi):
-    variables = pi.get_trainable_variables()
+    variables = pi.get_trainable_variables()    
     ret_vars = []
     for variable in variables:
         ret_vars.extend(list(np.ndarray.flatten(variable.eval())))
@@ -106,7 +106,8 @@ def get_gradient_indices(pi):
     ret_vars = []
     for var in variables:
         num_vars = get_num_dims(var.shape)
-        if 'pi/pol' in var.name:            
+        #if 'pi/pol' in var.name:
+        if True:            
             ret_vars.extend(range(idx, idx + num_vars))   
         
         idx += num_vars #TODO: Move this to utils
@@ -187,6 +188,7 @@ def return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgrada
     WriteMatrixToFile(output_prefix + '_objective.bin', np.array([[mean_ret]]))
     
     model_vars = np.array(get_model_vars(pi))[gradient_indices]
+
     WriteMatrixToFile(output_prefix + '_vars.bin', np.array(model_vars))
     
     
