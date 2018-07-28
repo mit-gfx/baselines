@@ -13,6 +13,8 @@ from functools import reduce
 from operator import mul
 import os
 from itertools import product
+import copy
+from baselines.common import set_global_seeds
 
 def traj_segment_generator(pi, env, horizon, stochastic):
     t = 0
@@ -110,9 +112,58 @@ def get_gradient_indices(pi):
         idx += num_vars #TODO: Move this to utils
     return ret_vars
         
+        
+def fd(pi, seg_gen):
 
-def return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set, seg):
+
+    eps = 1e-6
+    init_theta = get_model_vars(pi)
+    var_list = pi.get_trainable_variables()
+    setfromflat = U.SetFromFlat(var_list)
+    #out_theta = tf.fill(tf.shape(init_theta), 0.0)
+    out_theta = np.zeros(shape=len(init_theta))
     
+    
+    for i in range(len(init_theta)):
+        set_global_seeds(0)
+        theta_high = copy.deepcopy(init_theta)    
+        theta_high[i] += eps
+        setfromflat(theta_high)
+        seg = seg_gen.__next__()
+        mean_ret_high = np.mean(seg["ep_rets"])
+        
+        set_global_seeds(0)
+        theta_low = copy.deepcopy(init_theta)
+        theta_low[i] -= eps
+        setfromflat(theta_low)
+        seg = seg_gen.__next__()
+        mean_ret_low = np.mean(seg["ep_rets"])
+        
+        cd = (mean_ret_high - mean_ret_low) / (2.0 * eps)
+        out_theta[i] = cd
+        
+    #IPython.embed()
+    return out_theta
+        
+        
+        
+        
+
+    '''
+    TODO:
+    1. Perturbate each of the thetas in order
+    2. Simulate the rollouts for each and get the returns.  Simulate for a certain fixed number of timesteps (unclear how to choose this)
+    3. Take the output, compute the central difference, then set the appropriate gradient cell using this.
+    '''
+    
+    '''
+    TODO: how the heck do we get the hessian?
+    
+    '''
+
+def return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set, seg, seg_gen):
+    #TODO: Maybe seg_gen can be reseeded in some way, to reduce variance?
+    #TODO: Can we set the policy to deterministic for this part?
     gradient_indices = get_gradient_indices(pi)
     
     rets = seg["ep_rets"]
@@ -130,6 +181,7 @@ def return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgrada
     if gradients:
         mean_gradient = np.mean(gradient_set, axis=0)
         mean_gradient = mean_gradient[gradient_indices]
+        #output_gradient = fd(pi, seg_gen)
         WriteMatrixToFile(output_prefix + '_gradient.bin', mean_gradient)
     mean_objective = np.sum(np.mean(losses, axis=0)[0:3])
     WriteMatrixToFile(output_prefix + '_objective.bin', np.array([[mean_ret]]))
@@ -287,12 +339,12 @@ def learn(env, policy_fn, *,
         print(get_model_vars(pi))
         if sim:
             print('return routine')
-            return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set, seg)            
+            return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set, seg, seg_gen)            
             return pi
         if np.mean(list(map(np.linalg.norm, gradient_set))) < 1e-4: #TODO: make this a variable
             #TODO: abstract all this away somehow (scope)
             print('minimized!')
-            return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set, seg)
+            return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set, seg, seg_gen)
             return pi
         print(np.mean(list(map(np.linalg.norm, np.array(gradient_set)))))
         logger.log("Evaluating losses...")
@@ -306,7 +358,6 @@ def learn(env, policy_fn, *,
             logger.record_tabular("loss_"+name, lossval)
         logger.record_tabular("ev_tdlam_before", explained_variance(vpredbefore, tdlamret))
         lrlocal = (seg["ep_lens"], seg["ep_rets"]) # local values
-        IPython.embed()
         listoflrpairs = MPI.COMM_WORLD.allgather(lrlocal) # list of tuples
         lens, rews = map(flatten_lists, zip(*listoflrpairs))
         lenbuffer.extend(lens)
@@ -326,7 +377,7 @@ def learn(env, policy_fn, *,
             U.save_state(model_dir + model_path + str(iters_so_far))
 
     print('out of time')
-    return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set, seg)
+    return_routine(pi, d, batch, output_prefix, losses, cur_lrmult, lossandgradandhessian, gradients, hessians, gradient_set, seg, seg_gen)
     return pi
 
 def flatten_lists(listoflists):
