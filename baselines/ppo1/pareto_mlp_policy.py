@@ -20,28 +20,39 @@ class ParetoMlpPolicy(object):
 
         ob = U.get_placeholder(name="ob", dtype=tf.float32, shape=[sequence_length] + list(ob_space.shape))
 
+
         with tf.variable_scope("obfilter"):
             self.ob_rms = RunningMeanStd(shape=ob_space.shape)
             #self.ob_rms = tf.Print(self.ob_rms, [self.ob_rms])
 
+        start_idx = 0
         with tf.variable_scope('vf'):
             obz = tf.clip_by_value((ob - self.ob_rms.mean) / self.ob_rms.std, -5.0, 5.0)
             last_out = obz
             for i in range(num_hid_layers):
-                last_out = tf.nn.tanh(tf.layers.dense(last_out, hid_size, name="fc%i"%(i+1), kernel_initializer=U.normc_initializer(1.0)))
-            self.vpred = tf.layers.dense(last_out, 1, name='final', kernel_initializer=U.normc_initializer(1.0))[:,0]
-            #self.vpred = tf.Print(self.vpred, [self.vpred])
-
+                old_last_out = last_out
+                bias_offset = int(list(old_last_out.shape)[-1]) * hid_size
+                last_out = tf.nn.tanh(tf.layers.dense(last_out, hid_size, name="fc%i"%(i+1), kernel_initializer=U.file_initializer(file_path, start_idx), bias_initializer=U.file_initializer_bias(file_path, start_idx + bias_offset)))
+                bias_count = hid_size
+                start_idx += bias_offset + bias_count    
+            bias_offset = int(list(last_out.shape)[-1])             
+            self.vpred = tf.layers.dense(last_out, 1, name='final', kernel_initializer=U.file_initializer(file_path, start_idx), bias_initializer=U.file_initializer_bias(file_path, start_idx + bias_offset))[:,0]
+            bias_count = 1
+            start_idx += bias_offset+bias_count
+            #self.vpred = tf.Print(self.vpred, [self.vpred])            
         with tf.variable_scope('pol'):
-            last_out = obz
-            start_idx = 0
+            last_out = obz            
             for i in range(num_hid_layers):
                 old_last_out = last_out
-                last_out = tf.nn.tanh(tf.layers.dense(last_out, hid_size, name='fc%i'%(i+1), kernel_initializer=U.file_initializer(file_path, start_idx)))
-                start_idx += int(list(old_last_out.shape)[-1]) * hid_size
-            if gaussian_fixed_var and isinstance(ac_space, gym.spaces.Box):
-                mean = tf.layers.dense(last_out, pdtype.param_shape()[0]//2, name='final', kernel_initializer=U.file_initializer(file_path, start_idx))
-                start_idx += int(list(last_out.shape)[-1]) * pdtype.param_shape()[0]//2
+                bias_offset = int(list(old_last_out.shape)[-1]) * hid_size
+                last_out = tf.nn.tanh(tf.layers.dense(last_out, hid_size, name='fc%i'%(i+1), kernel_initializer=U.file_initializer(file_path, start_idx), bias_initializer=U.file_initializer_bias(file_path, start_idx + bias_offset)))
+                bias_count = hid_size
+                start_idx += bias_offset+bias_count
+            if gaussian_fixed_var and isinstance(ac_space, gym.spaces.Box): 
+                bias_offset = int(list(last_out.shape)[-1]) * pdtype.param_shape()[0]//2               
+                mean = tf.layers.dense(last_out, pdtype.param_shape()[0]//2, name='final', kernel_initializer=U.file_initializer(file_path, start_idx), bias_initializer=U.file_initializer_bias(file_path, start_idx + bias_offset))
+                bias_count = pdtype.param_shape()[0]//2
+                start_idx += bias_offset+bias_count
                 logstd = tf.get_variable(name="logstd", shape=[1, pdtype.param_shape()[0]//2], initializer=U.file_initializer(file_path, start_idx))
                 pdparam = tf.concat([mean, mean * 0.0 + logstd], axis=1)
             else:
@@ -50,6 +61,7 @@ class ParetoMlpPolicy(object):
                 pdparam = tf.layers.dense(last_out, pdtype.param_shape()[0], name='final', kernel_initializer=U.normc_initializer(0.01))
             #pdparam = tf.Print(pdparam, [pdparam])
         self.pd = pdtype.pdfromflat(pdparam)
+
 
         self.state_in = []
         self.state_out = []

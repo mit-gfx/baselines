@@ -108,6 +108,18 @@ def file_initializer(file_path, start_idx, std=1.0, axis=0):
         out *= std / np.sqrt(np.square(out).sum(axis=axis, keepdims=True))
         return tf.constant(out)
     return _initializer
+    
+def file_initializer_bias(file_path, start_idx, axis=0):
+    # file_path points to a binary file that stores a one dimensional array.
+    if (file_path is None) or (not os.path.isfile(file_path)): #if it doesn't exist, go with the default
+        return tf.zeros_initializer()
+    #otherwise, default
+    data = mu.ReadMatrixFromFile(file_path).flatten()
+    def _initializer(shape, dtype=None, partition_info=None):
+        num = reduce(lambda x, y: x*y, shape)
+        out = data[start_idx : start_idx + num]
+        return tf.constant(out)
+    return _initializer
 
 def conv2d(x, num_filters, name, filter_size=(3, 3), stride=(1, 1), pad="SAME", dtype=tf.float32, collections=None,
            summary_tag=None):
