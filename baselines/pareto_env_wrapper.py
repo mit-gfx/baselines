@@ -100,14 +100,30 @@ class HopperParetoWrapper(HopperEnv):
         self.metadata = env.metadata
 
     def step(self, action):
-        ob, reward, done, info = self.env.step(action)
-        # TODO: Recalculate reward.
-        info['reward1'] = reward
-        info['reward2'] = -np.dot(action, action)
-        return ob, reward, done, info
+        posbefore, heightbefore = self.env.sim.data.qpos[0:2]
+        self.env.do_simulation(action, self.env.frame_skip)
+        posafter, heightafter, ang = self.env.sim.data.qpos[0:3]
+        alive_bonus = 1.0
+        r1 = (posafter - posbefore) / self.env.dt
+        r2 = max(heightafter - 1.4, 0.0)
+        #r2 = 1.0 if heightafter  1.5 else 0
+        r1 += alive_bonus
+        r2 += alive_bonus
+        r1 -= 1e-3 * np.square(action).sum()
+        r2 -= 1e-3 * np.square(action).sum()
+        s = self.env.state_vector()
+        done = not (np.isfinite(s).all() and (np.abs(s[2:]) < 100).all() and
+                    (heightafter > .7) and (abs(ang) < .2))
+        ob = self.env._get_obs()
+        return ob, r2, done, {}
 
     def reset(self):
-        return self.env.reset()
+        self.env.sim.reset()
+        self.env.set_state(self.env.init_qpos, self.env.init_qvel)
+        ob = self.env._get_obs()
+        if self.env.viewer is not None:
+            self.env.viewer_setup()
+        return ob
 
     def render(self, mode='human'):
         self.env.render(mode)
