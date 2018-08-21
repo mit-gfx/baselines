@@ -2,6 +2,8 @@ from gym.envs.classic_control import CartPoleEnv
 from gym.envs.mujoco import *
 import numpy as np
 
+import IPython
+
 class CartPoleParetoWrapper(CartPoleEnv):
     env = None
     
@@ -105,17 +107,20 @@ class HopperParetoWrapper(HopperEnv):
         posafter, heightafter, ang = self.env.sim.data.qpos[0:3]
         alive_bonus = 1.0
         r1 = (posafter - posbefore) / self.env.dt
-        r2 = max(heightafter - 1.4, 0.0)
-        #r2 = 1.0 if heightafter  1.5 else 0
+        r2 = -posafter ** 2 + max((heightafter - heightbefore) / self.env.dt, 0)
         r1 += alive_bonus
         r2 += alive_bonus
         r1 -= 1e-3 * np.square(action).sum()
-        r2 -= 1e-3 * np.square(action).sum()
+        #r2 -= 1e-3 * np.square(action).sum()
         s = self.env.state_vector()
-        done = not (np.isfinite(s).all() and (np.abs(s[2:]) < 100).all() and
-                    (heightafter > .7) and (abs(ang) < .2))
+        done = not (np.isfinite(s).all() and (np.abs(s[2:]) < 100).all()
+                     and (heightafter > .7)
+                     and (abs(ang) < .2))
         ob = self.env._get_obs()
-        return ob, r2, done, {}
+        info = {}
+        info[0] = r1
+        info[1] = r1
+        return ob, r2, done, info
 
     def reset(self):
         self.env.sim.reset()
